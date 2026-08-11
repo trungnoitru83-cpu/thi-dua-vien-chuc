@@ -1,0 +1,326 @@
+import React, { useState, useEffect } from 'react';
+import { Teacher, Form01Data, Form03Evaluation, Role } from './types';
+import { INITIAL_TEACHERS, createDefaultForm01, createDefaultEvaluation } from './data/mockTeachers';
+import { Navbar } from './components/Navbar';
+import { LoginPage } from './components/LoginPage';
+import { TeacherProfilePage } from './components/TeacherProfilePage';
+import { Form03Page } from './components/Form03Page';
+import { SummaryTablePage } from './components/SummaryTablePage';
+import { ManageTeachersModal } from './components/ManageTeachersModal';
+import { PrintReportView } from './components/PrintReportView';
+import {
+  syncInitialDataToFirestore,
+  listenToTeachers,
+  listenToForm01,
+  listenToEvaluations,
+  saveTeacherToFirestore,
+  saveForm01ToFirestore,
+  saveEvaluationToFirestore
+} from './lib/firebaseService';
+
+export default function App() {
+  // Application State
+  const [activeTab, setActiveTab] = useState<'login' | 'profile' | 'evaluation' | 'summary'>('login');
+  const [selectedMonth, setSelectedMonth] = useState<number>(4); // Default Month 4
+  const [selectedYear, setSelectedYear] = useState<number>(2026); // Default Year 2026 per sheet
+  const [currentRole, setCurrentRole] = useState<Role>('teacher');
+
+  // Teachers State (defaults to 36 teachers list)
+  const [teachers, setTeachers] = useState<Teacher[]>(() => {
+    const saved = localStorage.getItem('nuocoa_teachers');
+    return saved ? JSON.parse(saved) : INITIAL_TEACHERS;
+  });
+
+  // Current Logged-In Teacher (defaults to null for secure login)
+  const [currentUser, setCurrentUser] = useState<Teacher | null>(null);
+
+  // Selected Teacher for Evaluation
+  const [selectedTeacher, setSelectedTeacher] = useState<Teacher>(() => {
+    return teachers[0] || INITIAL_TEACHERS[0];
+  });
+
+  // Form01 State (teacherId_yYear_mMonth -> Form01Data)
+  const [form01Data, setForm01Data] = useState<Record<string, Form01Data>>(() => {
+    const saved = localStorage.getItem('nuocoa_form01');
+    if (saved) return JSON.parse(saved);
+    
+    // Populate default Mẫu 01 for 34 teachers
+    const initial: Record<string, Form01Data> = {};
+    INITIAL_TEACHERS.forEach(t => {
+      initial[`${t.id}_y2026_m4`] = createDefaultForm01(t.id, 4);
+      initial[`${t.id}_y2026_m5`] = createDefaultForm01(t.id, 5);
+    });
+    return initial;
+  });
+
+  // Form03 State (teacherId_yYear_mMonth -> Form03Evaluation)
+  const [evaluations, setEvaluations] = useState<Record<string, Form03Evaluation>>(() => {
+    const saved = localStorage.getItem('nuocoa_evaluations');
+    if (saved) return JSON.parse(saved);
+
+    // Populate default Mẫu 03 evaluations for all 34 teachers
+    const initial: Record<string, Form03Evaluation> = {};
+    INITIAL_TEACHERS.forEach((t, i) => {
+      initial[`${t.id}_y2026_m4`] = createDefaultEvaluation(t.id, 4, 2026, i);
+      initial[`${t.id}_y2026_m5`] = createDefaultEvaluation(t.id, 5, 2026, i);
+    });
+    return initial;
+  });
+
+  // Modals
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
+  const [printModalConfig, setPrintModalConfig] = useState<{
+    isOpen: boolean;
+    type: 'form01' | 'form03' | 'summary';
+    teacherId?: string;
+  }>({
+    isOpen: false,
+    type: 'summary'
+  });
+
+  // Firebase Firestore Setup and Listeners
+  useEffect(() => {
+    // 1. Seed initial data to Firestore if database is empty
+    syncInitialDataToFirestore(INITIAL_TEACHERS, form01Data, evaluations);
+
+    // 2. Real-time subscriber for Teachers
+    const unsubTeachers = listenToTeachers((remoteTeachers) => {
+      if (remoteTeachers.length > 0) {
+        setTeachers(remoteTeachers);
+      }
+    });
+
+    // 3. Real-time subscriber for Form 01
+    const unsubForm01 = listenToForm01((remoteForm01) => {
+      if (Object.keys(remoteForm01).length > 0) {
+        setForm01Data(prev => ({ ...prev, ...remoteForm01 }));
+      }
+    });
+
+    // 4. Real-time subscriber for Evaluations
+    const unsubEvals = listenToEvaluations((remoteEvals) => {
+      if (Object.keys(remoteEvals).length > 0) {
+        setEvaluations(prev => ({ ...prev, ...remoteEvals }));
+      }
+    });
+
+    return () => {
+      unsubTeachers();
+      unsubForm01();
+      unsubEvals();
+    };
+  }, []);
+
+  // Save to LocalStorage
+  useEffect(() => {
+    localStorage.setItem('nuocoa_teachers', JSON.stringify(teachers));
+  }, [teachers]);
+
+  useEffect(() => {
+    localStorage.setItem('nuocoa_form01', JSON.stringify(form01Data));
+  }, [form01Data]);
+
+  useEffect(() => {
+    localStorage.setItem('nuocoa_evaluations', JSON.stringify(evaluations));
+  }, [evaluations]);
+
+  // Login Handlers
+  const handleLogin = (teacher: Teacher, role: Role) => {
+    setCurrentUser(teacher);
+    setSelectedTeacher(teacher);
+    setCurrentRole(role);
+    setActiveTab('profile');
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setActiveTab('login');
+  };
+
+  // Teacher Profile Updates
+  const handleUpdateTeacher = (updatedTeacher: Teacher) => {
+    setTeachers(prev => prev.map(t => t.id === updatedTeacher.id ? updatedTeacher : t));
+    if (currentUser?.id === updatedTeacher.id) {
+      setCurrentUser(updatedTeacher);
+    }
+    if (selectedTeacher?.id === updatedTeacher.id) {
+      setSelectedTeacher(updatedTeacher);
+    }
+    saveTeacherToFirestore(updatedTeacher);
+  };
+
+  // Form01 Updates
+  const handleUpdateForm01 = (updatedForm01: Form01Data) => {
+    const key = `${updatedForm01.teacherId}_y${selectedYear}_m${updatedForm01.month}`;
+    setForm01Data(prev => ({
+      ...prev,
+      [key]: updatedForm01
+    }));
+    saveForm01ToFirestore(key, updatedForm01);
+  };
+
+  // Form03 Evaluation Updates
+  const handleSaveEvaluation = (evalData: Form03Evaluation) => {
+    const key = `${evalData.teacherId}_y${selectedYear}_m${evalData.month}`;
+    setEvaluations(prev => ({
+      ...prev,
+      [key]: evalData
+    }));
+    saveEvaluationToFirestore(key, evalData);
+  };
+
+  // Manage Teachers Handlers
+  const handleAddTeacher = (newTeacher: Teacher) => {
+    setTeachers(prev => [...prev, newTeacher]);
+    saveTeacherToFirestore(newTeacher);
+
+    // Create default forms
+    const key01 = `${newTeacher.id}_y${selectedYear}_m${selectedMonth}`;
+    const key03 = `${newTeacher.id}_y${selectedYear}_m${selectedMonth}`;
+    const defaultF01 = createDefaultForm01(newTeacher.id, selectedMonth);
+    const defaultF03 = createDefaultEvaluation(newTeacher.id, selectedMonth, selectedYear);
+
+    setForm01Data(prev => ({ ...prev, [key01]: defaultF01 }));
+    setEvaluations(prev => ({ ...prev, [key03]: defaultF03 }));
+
+    saveForm01ToFirestore(key01, defaultF01);
+    saveEvaluationToFirestore(key03, defaultF03);
+  };
+
+  const handleDeleteTeacher = (teacherId: string) => {
+    setTeachers(prev => prev.filter(t => t.id !== teacherId));
+  };
+
+  // Active Form01 and Form03 for currently selected teacher
+  const currentKey = `${selectedTeacher.id}_y${selectedYear}_m${selectedMonth}`;
+  const currentForm01 = form01Data[currentKey] || form01Data[`${selectedTeacher.id}_m${selectedMonth}`] || createDefaultForm01(selectedTeacher.id, selectedMonth);
+  const currentEvaluation = evaluations[currentKey] || evaluations[`${selectedTeacher.id}_m${selectedMonth}`] || createDefaultEvaluation(selectedTeacher.id, selectedMonth, selectedYear);
+
+  // Map of evaluations for summary table
+  const summaryEvaluationsMap: Record<string, Form03Evaluation> = {};
+  teachers.forEach(t => {
+    const k = `${t.id}_y${selectedYear}_m${selectedMonth}`;
+    summaryEvaluationsMap[t.id] = evaluations[k] || evaluations[`${t.id}_m${selectedMonth}`] || createDefaultEvaluation(t.id, selectedMonth, selectedYear);
+  });
+
+  return (
+    <div className="min-h-screen bg-slate-100/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
+      
+      {/* Top Navbar */}
+      <Navbar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        currentUser={currentUser}
+        currentRole={currentRole}
+        selectedMonth={selectedMonth}
+        setSelectedMonth={setSelectedMonth}
+        selectedYear={selectedYear}
+        setSelectedYear={setSelectedYear}
+        onLogout={handleLogout}
+        teacherCount={teachers.length}
+      />
+
+      {/* Main Page View Router */}
+      <main className="flex-1">
+        {(!currentUser || activeTab === 'login') && (
+          <LoginPage
+            teachers={teachers}
+            onLogin={handleLogin}
+            onSelectTeacherForDemo={(teacher, role) => {
+              handleLogin(teacher, role);
+            }}
+          />
+        )}
+
+        {currentUser && activeTab === 'profile' && (
+          <TeacherProfilePage
+            teachers={teachers}
+            teacher={selectedTeacher}
+            form01={currentForm01}
+            selectedMonth={selectedMonth}
+            currentRole={currentRole}
+            onSelectTeacher={(t) => setSelectedTeacher(t)}
+            onUpdateTeacher={handleUpdateTeacher}
+            onUpdateForm01={handleUpdateForm01}
+            onNavigateToForm03={() => setActiveTab('evaluation')}
+          />
+        )}
+
+        {currentUser && activeTab === 'evaluation' && (
+          <Form03Page
+            teachers={teachers}
+            currentTeacher={selectedTeacher}
+            onSelectTeacher={(t) => setSelectedTeacher(t)}
+            evaluation={currentEvaluation}
+            selectedMonth={selectedMonth}
+            currentRole={currentRole}
+            onSaveEvaluation={handleSaveEvaluation}
+            onOpenPrintModal={(type, teacherId) => {
+              setPrintModalConfig({
+                isOpen: true,
+                type,
+                teacherId
+              });
+            }}
+            onNavigateToSummary={() => setActiveTab('summary')}
+          />
+        )}
+
+        {currentUser && activeTab === 'summary' && (
+          <SummaryTablePage
+            teachers={teachers}
+            evaluations={summaryEvaluationsMap}
+            selectedMonth={selectedMonth}
+            onSelectTeacherForView={(t, tab) => {
+              setSelectedTeacher(t);
+              setActiveTab(tab);
+            }}
+            onOpenManageTeachersModal={() => setIsManageModalOpen(true)}
+            onOpenPrintModal={(type, teacherId) => {
+              setPrintModalConfig({
+                isOpen: true,
+                type,
+                teacherId
+              });
+            }}
+          />
+        )}
+      </main>
+
+      {/* Footer */}
+      <footer className="mt-auto py-6 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 text-center text-xs text-slate-500">
+        <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
+          <p className="font-semibold text-slate-700 dark:text-slate-300">
+            Hệ thống Quản lý & Chấm điểm Thi đua Giáo viên hàng tháng — Trường PTDTNT THCS và THPT Nước Oa
+          </p>
+          <p className="text-[11px] text-slate-400">
+            Bản quyền © 2026. Chuẩn Mẫu 01, Mẫu 03 & Bảng tổng hợp thi đua ngành Giáo dục.
+          </p>
+        </div>
+      </footer>
+
+      {/* Modals */}
+      <ManageTeachersModal
+        isOpen={isManageModalOpen}
+        onClose={() => setIsManageModalOpen(false)}
+        teachers={teachers}
+        onAddTeacher={handleAddTeacher}
+        onUpdateTeacher={handleUpdateTeacher}
+        onDeleteTeacher={handleDeleteTeacher}
+      />
+
+      <PrintReportView
+        type={printModalConfig.type}
+        isOpen={printModalConfig.isOpen}
+        onClose={() => setPrintModalConfig({ ...printModalConfig, isOpen: false })}
+        teachers={teachers}
+        currentTeacher={teachers.find(t => t.id === printModalConfig.teacherId) || selectedTeacher}
+        form01={currentForm01}
+        evaluation={currentEvaluation}
+        evaluations={summaryEvaluationsMap}
+        selectedMonth={selectedMonth}
+      />
+
+    </div>
+  );
+}

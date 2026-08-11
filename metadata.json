@@ -1,0 +1,6 @@
+{
+  "name": "Chấm Thi Đua Nước Oa",
+  "description": "Hệ thống quản lý và chấm điểm thi đua hàng tháng cho giáo viên theo Mẫu 01, Mẫu 03 và Bảng tổng hợp xếp loại.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

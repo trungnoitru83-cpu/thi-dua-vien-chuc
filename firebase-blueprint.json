@@ -1,0 +1,62 @@
+{
+  "entities": {
+    "teachers": {
+      "title": "Teachers",
+      "description": "Danh sách cán bộ giáo viên trường PTDTNT THCS và THPT Nước Oa",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "fullName": { "type": "string" },
+        "email": { "type": "string" },
+        "dob": { "type": "string" },
+        "subject": { "type": "string" },
+        "department": { "type": "string" },
+        "school": { "type": "string" },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["id", "fullName", "email"]
+    },
+    "form01": {
+      "title": "Form 01 Submissions",
+      "description": "Báo cáo tự đánh giá và đính kèm minh chứng Mẫu 01",
+      "type": "object",
+      "properties": {
+        "teacherId": { "type": "string" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "attachedLink": { "type": "string" },
+        "attachedFiles": { "type": "array", "items": { "type": "string" } },
+        "notes": { "type": "string" },
+        "submittedAt": { "type": "string" },
+        "updatedBy": { "type": "string" }
+      },
+      "required": ["teacherId", "month", "year"]
+    },
+    "evaluations": {
+      "title": "Form 03 Monthly Evaluations",
+      "description": "Bảng chấm điểm thi đua Mẫu 03 từng giáo viên",
+      "type": "object",
+      "properties": {
+        "teacherId": { "type": "string" },
+        "month": { "type": "number" },
+        "year": { "type": "number" },
+        "teacherSelfScores": { "type": "object" },
+        "principalScores": { "type": "object" },
+        "bonusScore": { "type": "number" },
+        "penaltyScore": { "type": "number" },
+        "bonusReason": { "type": "string" },
+        "penaltyReason": { "type": "string" },
+        "teacherTotal": { "type": "number" },
+        "principalTotal": { "type": "number" },
+        "finalScore": { "type": "number" },
+        "finalRank": { "type": "string" },
+        "teacherSigned": { "type": "boolean" },
+        "principalSigned": { "type": "boolean" },
+        "teacherSignDate": { "type": "string" },
+        "principalSignDate": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["teacherId", "month", "year"]
+    }
+  }
+}
