@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Award, Search, Filter, Printer, Download, UserPlus, Eye, FileSpreadsheet, CheckCircle, AlertTriangle, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Award, Search, Filter, Printer, Download, UserPlus, Eye, FileSpreadsheet, CheckCircle, AlertTriangle, ShieldCheck, HelpCircle, Copy, FileText } from 'lucide-react';
 import { Teacher, Form03Evaluation, ClassificationType } from '../types';
 import { CLASSIFICATION_RULES, getClassificationLabel, getClassification } from '../data/form03Criteria';
+import { exportToWord } from '../lib/wordExport';
 
 interface SummaryTablePageProps {
   teachers: Teacher[];
@@ -23,6 +24,12 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [classificationFilter, setClassificationFilter] = useState<string>('ALL');
+  const [copiedToast, setCopiedToast] = useState(false);
+
+  // Helper to fetch monthly evaluation for a teacher
+  const getEval = (teacherId: string): Form03Evaluation | undefined => {
+    return evaluations[`${teacherId}_y2026_m${selectedMonth}`] || evaluations[teacherId];
+  };
 
   // Filter teachers list
   const filteredTeachers = teachers.filter((t) => {
@@ -32,10 +39,10 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
     
     const matchesDept = departmentFilter === 'ALL' || t.department === departmentFilter;
 
-    const ev = evaluations[t.id];
+    const ev = getEval(t.id);
     const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
     const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
-    const score = Math.min(100, partA + partB);
+    const score = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
     const cls = getClassification(score);
     const matchesClass = classificationFilter === 'ALL' || cls === classificationFilter;
 
@@ -50,10 +57,10 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
   let totalPointsSum = 0;
 
   teachers.forEach((t) => {
-    const ev = evaluations[t.id];
+    const ev = getEval(t.id);
     const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
     const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
-    const score = Math.min(100, partA + partB);
+    const score = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
     totalPointsSum += score;
 
     if (score >= 90) totalExcellent++;
@@ -72,14 +79,14 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
     csvContent += `STT,Họ và tên giáo viên,Ngày sinh,Bộ môn,Tổ chuyên môn,Trường,Điểm Cột A (Max 30),Điểm Cột B (Max 70),Điểm Cộng GV Tự Chấm (C.1+C.2+C.3+C.4),Điểm Cộng HT Duyệt (C.1+C.2+C.3+C.4),Điểm Trừ GV Tự Chấm (D.1+D.2+D.3),Điểm Trừ HT Duyệt (D.1+D.2+D.3),Tổng điểm (A+B),Xếp loại thi đua,Trạng thái\n`;
 
     teachers.forEach((t, idx) => {
-      const ev = evaluations[t.id];
+      const ev = getEval(t.id);
       const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
       const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
       const bonusTeacher = ev ? (ev.totalBonus_Teacher || 0) : 0;
       const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
       const dedTeacher = ev ? (ev.totalDeduction_Teacher || 0) : 0;
       const dedPrincipal = ev ? (ev.totalDeduction_Principal || 0) : 0;
-      const grandTotal = Math.min(100, partA + partB);
+      const grandTotal = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
       const clsLabel = getClassificationLabel(getClassification(grandTotal));
       const statusLabel = ev?.status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt';
 
@@ -94,6 +101,63 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Copy Tab-Separated Values for direct pasting into Google Sheets
+  const handleCopyForGoogleSheets = () => {
+    let tsv = `STT\tHọ và tên giáo viên\tNgày sinh\tBộ môn\tTổ chuyên môn\tTrường\tĐiểm A (Max 30)\tĐiểm B (Max 70)\tĐiểm Cộng (+C)\tĐiểm Trừ (-D)\tTổng điểm\tXếp loại thi đua\n`;
+    teachers.forEach((t, idx) => {
+      const ev = getEval(t.id);
+      const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
+      const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
+      const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
+      const dedPrincipal = ev ? (ev.totalDeduction_Principal || 0) : 0;
+      const grandTotal = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
+      const clsLabel = getClassificationLabel(getClassification(grandTotal));
+
+      tsv += `${idx + 1}\t${t.fullName}\t${t.dob}\t${t.subject}\t${t.department}\t${t.school}\t${partA}\t${partB}\t${bonusPrincipal}\t${dedPrincipal}\t${grandTotal}\t${clsLabel}\n`;
+    });
+
+    navigator.clipboard.writeText(tsv).then(() => {
+      setCopiedToast(true);
+      setTimeout(() => setCopiedToast(false), 4500);
+    });
+  };
+
+  // Export summary table to Word .doc format
+  const handleExportWord = () => {
+    let html = `<div class="title">BẢNG TỔNG HỢP XẾP LOẠI THI ĐUA ${teachers.length} GIÁO VIÊN THÁNG ${selectedMonth}/2026</div>`;
+    html += `<div class="subtitle">Trường PTDTNT THCS và THPT Nước Oa</div>`;
+    html += `<table><thead><tr>
+      <th>STT</th><th>Họ và tên</th><th>Ngày sinh</th><th>Bộ môn</th><th>Tổ chuyên môn</th><th>Điểm A</th><th>Điểm B</th><th>Điểm Cộng</th><th>Điểm Trừ</th><th>Tổng điểm</th><th>Xếp loại</th>
+    </tr></thead><tbody>`;
+
+    teachers.forEach((t, idx) => {
+      const ev = getEval(t.id);
+      const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
+      const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
+      const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
+      const dedPrincipal = ev ? (ev.totalDeduction_Principal || 0) : 0;
+      const grandTotal = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
+      const clsLabel = getClassificationLabel(getClassification(grandTotal));
+
+      html += `<tr>
+        <td style="text-align:center">${idx + 1}</td>
+        <td><strong>${t.fullName}</strong></td>
+        <td>${t.dob}</td>
+        <td>${t.subject}</td>
+        <td>${t.department}</td>
+        <td style="text-align:center">${partA}</td>
+        <td style="text-align:center">${partB}</td>
+        <td style="text-align:center">+${bonusPrincipal}</td>
+        <td style="text-align:center">-${dedPrincipal}</td>
+        <td style="text-align:center"><strong>${grandTotal}</strong></td>
+        <td>${clsLabel}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table>`;
+    exportToWord(html, `Bang_Tong_Hop_Thi_Dua_36_GV_Thang_${selectedMonth}`);
   };
 
   return (
@@ -111,10 +175,10 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
             </span>
           </div>
           <h1 className="text-2xl font-black text-slate-900 dark:text-white">
-            Bảng Tổng Hợp Xếp Loại Thi Đua {teachers.length} Giáo Viên
+            Bảng Tổng Hợp Xếp Loại Thi Đua {teachers.length} Cán Bộ Giáo Viên
           </h1>
           <p className="text-xs text-slate-500">
-            Trường PTDTNT THCS và THPT Nước Oa. Đã tổng hợp điểm Cột A, Cột B, Điểm Cộng, Điểm Trừ & 4 Mức xếp loại.
+            Trường PTDTNT THCS và THPT Nước Oa. Tự động đồng bộ điểm A+B, Điểm Cộng, Điểm Trừ vào file tổng hợp.
           </p>
         </div>
 
@@ -125,7 +189,24 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
             className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 font-bold text-xs text-slate-800 dark:text-slate-200 rounded-2xl transition"
           >
             <UserPlus className="w-4 h-4 text-blue-600" />
-            <span>Quản lý 34 GV</span>
+            <span>Quản lý {teachers.length} GV</span>
+          </button>
+
+          <button
+            onClick={handleCopyForGoogleSheets}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-500 text-white hover:bg-emerald-600 font-bold text-xs rounded-2xl shadow-md transition"
+            title="Sao chép toàn bộ bảng điểm để dán trực tiếp vào Google Sheets"
+          >
+            <Copy className="w-4 h-4" />
+            <span>Dán vào Google Sheets</span>
+          </button>
+
+          <button
+            onClick={handleExportWord}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-100 dark:bg-indigo-950/60 hover:bg-indigo-200 text-indigo-800 dark:text-indigo-300 font-bold text-xs rounded-2xl transition border border-indigo-300/50"
+          >
+            <FileText className="w-4 h-4" />
+            <span>Xuất file Word</span>
           </button>
 
           <button
@@ -145,6 +226,15 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
           </button>
         </div>
       </div>
+
+      {copiedToast && (
+        <div className="mb-6 p-4 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100 rounded-2xl border-2 border-emerald-500 flex items-center justify-between gap-3 font-bold text-sm shadow-lg animate-bounce">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="w-5 h-5 text-emerald-600" />
+            <span>✅ ĐÃ SAO CHÉP DỮ LIỆU THI ĐUA! Mở Google Sheets và nhấn Ctrl+V để dán dữ liệu.</span>
+          </div>
+        </div>
+      )}
 
       {/* 4 Classification Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
@@ -313,14 +403,14 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                 </tr>
               ) : (
                 filteredTeachers.map((t, idx) => {
-                  const ev = evaluations[t.id];
+                  const ev = getEval(t.id);
                   const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
                   const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
                   const bonusTeacher = ev ? (ev.totalBonus_Teacher || 0) : 0;
                   const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
                   const dedTeacher = ev ? (ev.totalDeduction_Teacher || 0) : 0;
                   const dedPrincipal = ev ? (ev.totalDeduction_Principal || 0) : 0;
-                  const grandTotal = Math.min(100, partA + partB);
+                  const grandTotal = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
                   const clsType = getClassification(grandTotal);
                   const clsRule = CLASSIFICATION_RULES.find(r => r.type === clsType);
 
@@ -421,7 +511,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
         </div>
 
         <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex items-center justify-between">
-          <span>Hiển thị {filteredTeachers.length} trên tổng số 34 giáo viên</span>
+          <span>Hiển thị {filteredTeachers.length} trên tổng số {teachers.length} giáo viên</span>
           <span>Cập nhật mới nhất: Tháng {selectedMonth}/2026</span>
         </div>
       </div>

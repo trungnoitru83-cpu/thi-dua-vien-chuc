@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, Calendar, GraduationCap, Building2, School, Link as LinkIcon, FileText, CheckCircle, Plus, Trash2, ExternalLink, Save, ArrowRight, ChevronLeft, ChevronRight, Users } from 'lucide-react';
+import { User, Calendar, GraduationCap, Building2, School, Link as LinkIcon, FileText, CheckCircle, Plus, Trash2, ExternalLink, Save, ArrowRight, ChevronLeft, ChevronRight, Users, Send } from 'lucide-react';
 import { Teacher, Form01Data, Form01Task, Role } from '../types';
+import { isLeaderTeacher } from '../data/form03Criteria';
 
 interface TeacherProfilePageProps {
   teachers?: Teacher[];
@@ -31,6 +32,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
   const [subject, setSubject] = useState(teacher.subject);
   const [department, setDepartment] = useState(teacher.department);
   const [school, setSchool] = useState(teacher.school);
+  const [evaluationDate, setEvaluationDate] = useState(`2026-0${selectedMonth}-28`);
 
   // Local state for Form 01
   const [attachedFileUrl, setAttachedFileUrl] = useState(form01.attachedFileUrl || '');
@@ -49,12 +51,15 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
     setAttachedFileUrl(form01.attachedFileUrl || '');
     setOverallSummary(form01.overallSummary || '');
     setTasks(form01.tasks || []);
-  }, [teacher, form01]);
+    setEvaluationDate(`2026-${selectedMonth < 10 ? '0' + selectedMonth : selectedMonth}-28`);
+  }, [teacher, form01, selectedMonth]);
 
   // Indexing for teacher navigation
   const currentIndex = teachers.findIndex(t => t.id === teacher.id);
   const prevTeacher = currentIndex > 0 ? teachers[currentIndex - 1] : null;
   const nextTeacher = currentIndex < teachers.length - 1 ? teachers[currentIndex + 1] : null;
+
+  const isLeader = isLeaderTeacher(teacher);
 
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,7 +142,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
           onClick={onNavigateToForm03}
           className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl shadow-md transition shrink-0"
         >
-          <span>Chuyển Sang Trang 3 (Chấm Mẫu 03)</span>
+          <span>{isLeader ? 'Chuyển sang tính điểm Mẫu 02 (CBQL)' : 'Chuyển sang tính điểm Mẫu 03 (GV, NV)'}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>
@@ -254,6 +259,23 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
+            {/* Chu kỳ đánh giá / Lịch chọn ngày */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                Chu kỳ đánh giá (Lịch chọn ngày / Tháng) <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <Calendar className="w-4 h-4 text-blue-600 absolute left-3.5 top-3.5 pointer-events-none" />
+                <input
+                  type="date"
+                  value={evaluationDate}
+                  onChange={(e) => setEvaluationDate(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 bg-blue-50/50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700 rounded-xl text-sm font-extrabold text-blue-900 dark:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer"
+                />
+              </div>
+              <p className="text-[10px] text-slate-500 mt-1">Chu kỳ Tháng {selectedMonth}/2026 đính kèm lịch lưu lâu dài</p>
+            </div>
+
             {/* Họ và tên */}
             <div>
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
@@ -523,10 +545,10 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-100 dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
           <div>
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              Hoàn tất cập nhật hồ sơ Mẫu 01 của giáo viên: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{teacher.fullName}</span>
+              Hoàn tất cập nhật hồ sơ Mẫu 01 của cán bộ: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{teacher.fullName}</span>
             </p>
             <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-              Bấm lưu dữ liệu Mẫu 01 rồi chuyển tiếp sang Trang 3 để chấm điểm thi đua Mẫu 03.
+              Xác nhận nộp Mẫu 01 rồi chuyển tiếp sang Trang 3 để tính điểm thi đua ({isLeader ? 'Mẫu 02 cho CBQL' : 'Mẫu 03 cho Giáo viên/Nhân viên'}).
             </p>
           </div>
 
@@ -546,8 +568,8 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4" />
-                  <span>Lưu Hồ Sơ & Mẫu 01</span>
+                  <Send className="w-4 h-4" />
+                  <span>Xác Nhận Nộp Mẫu 01</span>
                 </>
               )}
             </button>
@@ -557,7 +579,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
               onClick={onNavigateToForm03}
               className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/20 transition"
             >
-              <span>Chuyển Sang Trang 3 (Chấm Mẫu 03)</span>
+              <span>{isLeader ? 'Chuyển sang tính điểm Mẫu 02 (CBQL)' : 'Chuyển sang tính điểm Mẫu 03 (GV, NV)'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>

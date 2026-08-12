@@ -1,5 +1,5 @@
 import { Teacher, Form01Data, Form03Evaluation } from '../types';
-import { FORM_03_CRITERIA, getClassification } from './form03Criteria';
+import { getClassification, getCriteriaForTeacher } from './form03Criteria';
 
 export const SCHOOL_NAME = 'Trường PTDTNT THCS và THPT Nước Oa';
 
@@ -84,9 +84,12 @@ export function createDefaultForm01(teacherId: string, month: number, year: numb
 }
 
 // Helper to generate mock scores for a teacher
-export function createDefaultEvaluation(teacherId: string, month: number, year: number = 2026, offset: number = 0): Form03Evaluation {
+export function createDefaultEvaluation(teacherId: string, month: number, year: number = 2026, offset: number = 0, teacherObj?: Teacher): Form03Evaluation {
   const scores: Record<string, any> = {};
   
+  const teacher = teacherObj || INITIAL_TEACHERS.find(t => t.id === teacherId);
+  const criteriaList = getCriteriaForTeacher(teacher);
+
   // Base scores variation based on teacher index to give realistic distribution
   const idx = parseInt(teacherId.replace('gv', ''), 10) || 1;
   const isTop = idx <= 12 || idx % 3 === 0;
@@ -101,7 +104,7 @@ export function createDefaultEvaluation(teacherId: string, month: number, year: 
   let deduction_Teacher = 0;
   let deduction_Principal = 0;
 
-  FORM_03_CRITERIA.forEach(c => {
+  criteriaList.forEach(c => {
     let tScore = c.maxPoints;
     if (c.section === 'BONUS' || c.section === 'DEDUCTION') {
       tScore = 0; // Default bonus and deduction to 0
@@ -145,10 +148,9 @@ export function createDefaultEvaluation(teacherId: string, month: number, year: 
   const cappedB_Teacher = Math.min(70, partB_Teacher);
   const cappedB_Principal = Math.min(70, partB_Principal);
 
-  // Grand total is strictly Part A + Part B (Max 100).
-  // Bonus & Deduction are recorded separately in system/summary without affecting grand total score.
-  const grandTotal_Teacher = Math.min(100, cappedA_Teacher + cappedB_Teacher);
-  const grandTotal_Principal = Math.min(100, cappedA_Principal + cappedB_Principal);
+  // Grand total formula: Part A (A.1..A.27) + Part B (B.1..B.6) = max 100
+  const grandTotal_Teacher = Math.min(100, Math.round((cappedA_Teacher + cappedB_Teacher) * 100) / 100);
+  const grandTotal_Principal = Math.min(100, Math.round((cappedA_Principal + cappedB_Principal) * 100) / 100);
 
   return {
     id: `eval_${teacherId}_m${month}`,

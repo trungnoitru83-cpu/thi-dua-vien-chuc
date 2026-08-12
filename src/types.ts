@@ -1,4 +1,4 @@
-export type Role = 'teacher' | 'department_head' | 'principal';
+export type Role = 'teacher' | 'department_head' | 'principal' | 'staff';
 
 export type ClassificationType = 
   | 'HOAN_THANH_XUAT_SAC' // >= 90
@@ -39,6 +39,12 @@ export interface Form01Data {
   updatedAt: string;
 }
 
+export interface BenchmarkTier {
+  code: string;
+  label: string;
+  points: number;
+}
+
 export interface CriteriaItem {
   id: string;
   section: 'A' | 'B' | 'BONUS' | 'DEDUCTION';
@@ -48,6 +54,7 @@ export interface CriteriaItem {
   description?: string;
   maxPoints: number;
   scoreOptions: number[]; // e.g. [0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, ...]
+  tiers?: BenchmarkTier[];
 }
 
 export interface CriteriaScore {

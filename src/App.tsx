@@ -21,7 +21,7 @@ import {
 export default function App() {
   // Application State
   const [activeTab, setActiveTab] = useState<'login' | 'profile' | 'evaluation' | 'summary'>('login');
-  const [selectedMonth, setSelectedMonth] = useState<number>(4); // Default Month 4
+  const [selectedMonth, setSelectedMonth] = useState<number>(6); // Default Month 6/2026
   const [selectedYear, setSelectedYear] = useState<number>(2026); // Default Year 2026 per sheet
   const [currentRole, setCurrentRole] = useState<Role>('teacher');
 
@@ -47,8 +47,9 @@ export default function App() {
     // Populate default Mẫu 01 for 34 teachers
     const initial: Record<string, Form01Data> = {};
     INITIAL_TEACHERS.forEach(t => {
-      initial[`${t.id}_y2026_m4`] = createDefaultForm01(t.id, 4);
-      initial[`${t.id}_y2026_m5`] = createDefaultForm01(t.id, 5);
+      [4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(m => {
+        initial[`${t.id}_y2026_m${m}`] = createDefaultForm01(t.id, m);
+      });
     });
     return initial;
   });
@@ -61,8 +62,9 @@ export default function App() {
     // Populate default Mẫu 03 evaluations for all 34 teachers
     const initial: Record<string, Form03Evaluation> = {};
     INITIAL_TEACHERS.forEach((t, i) => {
-      initial[`${t.id}_y2026_m4`] = createDefaultEvaluation(t.id, 4, 2026, i);
-      initial[`${t.id}_y2026_m5`] = createDefaultEvaluation(t.id, 5, 2026, i);
+      [4, 5, 6, 7, 8, 9, 10, 11, 12].forEach(m => {
+        initial[`${t.id}_y2026_m${m}`] = createDefaultEvaluation(t.id, m, 2026, i);
+      });
     });
     return initial;
   });

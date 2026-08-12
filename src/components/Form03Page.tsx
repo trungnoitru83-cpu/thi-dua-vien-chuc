@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { FileSpreadsheet, CheckSquare, ShieldCheck, PenTool, Printer, Save, ChevronLeft, ChevronRight, User, AlertCircle, ArrowRight, CheckCircle } from 'lucide-react';
+import { FileSpreadsheet, CheckSquare, ShieldCheck, PenTool, Printer, Save, ChevronLeft, ChevronRight, User, AlertCircle, ArrowRight, CheckCircle, RefreshCw, FileText } from 'lucide-react';
 import { Teacher, Form03Evaluation, Role, CriteriaScore } from '../types';
-import { FORM_03_CRITERIA, CLASSIFICATION_RULES, getClassification, getClassificationLabel } from '../data/form03Criteria';
+import { FORM_03_CRITERIA, CLASSIFICATION_RULES, getClassification, getClassificationLabel, getCriteriaForTeacher, isLeaderTeacher } from '../data/form03Criteria';
 import { SignatureModal } from './SignatureModal';
+import { exportToWord } from '../lib/wordExport';
 
 interface Form03PageProps {
   teachers: Teacher[];
@@ -40,6 +41,7 @@ export const Form03Page: React.FC<Form03PageProps> = ({
   const [sigModalType, setSigModalType] = useState<'teacher' | 'principal' | null>(null);
 
   const [saveToast, setSaveToast] = useState(false);
+  const [saveToastMsg, setSaveToastMsg] = useState('');
 
   // Sync state if current teacher or evaluation changes
   React.useEffect(() => {
@@ -64,6 +66,10 @@ export const Form03Page: React.FC<Form03PageProps> = ({
     });
   };
 
+  // Determine criteria set (Mẫu 02 for Leaders/Principals/Department Heads, Mẫu 03 for Teachers)
+  const isLeader = isLeaderTeacher(currentTeacher);
+  const activeCriteria = getCriteriaForTeacher(currentTeacher);
+
   // Calculate live totals
   let rawPartA_Teacher = 0;
   let rawPartA_Principal = 0;
@@ -74,7 +80,7 @@ export const Form03Page: React.FC<Form03PageProps> = ({
   let deduction_Teacher = 0;
   let deduction_Principal = 0;
 
-  FORM_03_CRITERIA.forEach(c => {
+  activeCriteria.forEach(c => {
     const isBonusOrDed = c.section === 'BONUS' || c.section === 'DEDUCTION';
     const defaultScore = isBonusOrDed ? 0 : c.maxPoints;
     const sc = scores[c.id] || { teacherScore: defaultScore, principalScore: defaultScore };
@@ -99,16 +105,15 @@ export const Form03Page: React.FC<Form03PageProps> = ({
   const partB_Teacher = Math.min(70, rawPartB_Teacher);
   const partB_Principal = Math.min(70, rawPartB_Principal);
 
-  // Grand total is strictly Part A + Part B (Max 100).
-  // Bonus & Deduction are recorded separately in system & summary file without affecting grand total score.
-  const grandTotal_Teacher = Math.min(100, partA_Teacher + partB_Teacher);
-  const grandTotal_Principal = Math.min(100, partA_Principal + partB_Principal);
+  // Grand total formula: Part A (A.1 đến A.27, max 30) + Part B (B.1 đến B.6, max 70) = max 100
+  const grandTotal_Teacher = Math.min(100, Math.round((partA_Teacher + partB_Teacher) * 100) / 100);
+  const grandTotal_Principal = Math.min(100, Math.round((partA_Principal + partB_Principal) * 100) / 100);
 
   const teacherClass = getClassification(grandTotal_Teacher);
   const principalClass = getClassification(grandTotal_Principal);
 
-  // Save changes
-  const handleSave = (newStatus?: 'submitted' | 'approved' | 'rejected') => {
+  // Save changes & update summary file for 36 teachers
+  const handleSave = (newStatus?: 'submitted' | 'approved' | 'rejected', customMsg?: string) => {
     const finalStatus = newStatus || status;
     const updatedEval: Form03Evaluation = {
       ...evaluation,
@@ -137,8 +142,13 @@ export const Form03Page: React.FC<Form03PageProps> = ({
     onSaveEvaluation(updatedEval);
     if (newStatus) setStatus(newStatus);
 
+    const defaultMsg = finalStatus === 'approved' 
+      ? `✅ Đã cập nhật điểm Hiệu trưởng đánh giá (${grandTotal_Principal} điểm) và phê duyệt lưu vào File tổng hợp 36 Giáo viên!`
+      : `✅ Đã cập nhật điểm Giáo viên tự chấm (${grandTotal_Teacher} điểm) và lưu vào File tổng hợp 36 Giáo viên!`;
+
+    setSaveToastMsg(customMsg || defaultMsg);
     setSaveToast(true);
-    setTimeout(() => setSaveToast(false), 3000);
+    setTimeout(() => setSaveToast(false), 4500);
   };
 
   // Teacher navigation indexing
@@ -155,8 +165,8 @@ export const Form03Page: React.FC<Form03PageProps> = ({
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-3 py-1 text-xs font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 rounded-full">
-                TRANG 3: BẢNG CHẤM ĐIỂM MẪU 03
+              <span className={`px-3 py-1 text-xs font-bold rounded-full ${isLeader ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'}`}>
+                {isLeader ? 'TRANG 3: BẢNG CHẤM ĐIỂM MẪU 02 (CÁN BỘ QUẢN LÝ / TỔ TRƯỞNG)' : 'TRANG 3: BẢNG CHẤM ĐIỂM MẪU 03 (GIÁO VIÊN / NHÂN VIÊN)'}
               </span>
               <span className="text-xs text-slate-500 font-semibold">
                 Tháng {selectedMonth}/2026
@@ -170,27 +180,35 @@ export const Form03Page: React.FC<Form03PageProps> = ({
             </p>
           </div>
 
-          {/* Controls: Print + Go to Summary */}
-          <div className="flex items-center gap-2">
+          {/* Controls: Print + Export Word + Go to Summary */}
+          <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => onOpenPrintModal('form03', currentTeacher.id)}
               className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-2xl transition"
             >
               <Printer className="w-4 h-4 text-blue-600" />
-              <span>In Mẫu 03 (A4)</span>
+              <span>In {isLeader ? 'Mẫu 02' : 'Mẫu 03'} (A4)</span>
+            </button>
+
+            <button
+              onClick={() => onOpenPrintModal('form03', currentTeacher.id)}
+              className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 hover:bg-emerald-100 text-emerald-800 dark:text-emerald-200 font-bold text-xs rounded-2xl transition"
+            >
+              <FileText className="w-4 h-4 text-emerald-600" />
+              <span>Xuất File Word (.doc)</span>
             </button>
 
             <button
               onClick={onNavigateToSummary}
               className="flex items-center gap-1.5 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl shadow-md transition"
             >
-              <span>Xem Bảng Tổng Hợp 34 GV</span>
+              <span>Xem Bảng Tổng Hợp {teachers.length} GV</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* 34 Teachers Quick Selector Bar */}
+        {/* Teachers Quick Selector Bar */}
         <div className="mt-4 flex items-center justify-between gap-2">
           
           <button
@@ -204,7 +222,7 @@ export const Form03Page: React.FC<Form03PageProps> = ({
 
           <div className="flex-1 overflow-x-auto flex items-center gap-1.5 py-1 scrollbar-thin px-2">
             <span className="text-xs font-bold text-slate-400 shrink-0 mr-1">
-              Chọn GV ({currentIndex + 1}/34):
+              Chọn GV ({currentIndex + 1}/{teachers.length}):
             </span>
             {teachers.map((t, idx) => (
               <button
@@ -235,20 +253,20 @@ export const Form03Page: React.FC<Form03PageProps> = ({
       </div>
 
       {saveToast && (
-        <div className="mb-6 p-4 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/90 dark:text-emerald-100 rounded-2xl border-2 border-emerald-500 flex items-center justify-between gap-3 font-bold text-sm shadow-lg animate-bounce">
+        <div className="mb-6 p-4 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/90 dark:text-emerald-100 rounded-2xl border-2 border-emerald-500 flex items-center justify-between gap-3 font-bold text-sm shadow-xl animate-bounce">
           <div className="flex items-center gap-3">
             <CheckCircle className="w-6 h-6 text-emerald-600 dark:text-emerald-400 shrink-0" />
             <div>
               <p className="text-base font-extrabold text-emerald-800 dark:text-emerald-200">
-                ✅ ĐÃ LƯU MẪU 03 THÀNH CÔNG!
+                {saveToastMsg || '✅ ĐÃ CẬP NHẬT MẪU 03 VÀO FILE TỔNG HỢP VÀ HỆ THỐNG ĐÁM MÂY!'}
               </p>
-              <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                Bảng điểm thi đua tháng {selectedMonth}/2026 của giáo viên <strong>{currentTeacher.fullName}</strong> đã được lưu và cập nhật tức thì lên Firebase.
+              <p className="text-xs text-emerald-700 dark:text-emerald-300 font-medium mt-0.5">
+                Bảng điểm thi đua Tháng {selectedMonth}/2026 của giáo viên <strong>{currentTeacher.fullName}</strong> đã tự động đồng bộ vào File tổng hợp {teachers.length} Giáo viên.
               </p>
             </div>
           </div>
           <span className="px-3 py-1 bg-emerald-600 text-white rounded-full text-xs font-black uppercase shrink-0">
-            ĐÃ LƯU FIREBASE
+            ĐÃ ĐỒNG BỘ
           </span>
         </div>
       )}
@@ -260,11 +278,11 @@ export const Form03Page: React.FC<Form03PageProps> = ({
         <div className="bg-gradient-to-r from-blue-900 to-indigo-900 text-white px-6 py-5 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <span className="px-2.5 py-0.5 bg-white/20 text-white font-extrabold text-[11px] rounded-md">
-                MẪU 03 - THI ĐUA THÁNG
+              <span className="px-2.5 py-0.5 bg-white/20 text-white font-extrabold text-[11px] rounded-md uppercase">
+                {isLeader ? 'MẪU 02 - CÁN BỘ QUẢN LÝ / TỔ TRƯỞNG' : 'MẪU 03 - THI ĐUA THÁNG'}
               </span>
               <span className="text-xs text-blue-200 font-medium">
-                Dành cho Giáo viên & BGH chấm điểm
+                {isLeader ? 'Dành cho Hiệu trưởng, Phó Hiệu trưởng & Tổ trưởng' : 'Dành cho Giáo viên & BGH chấm điểm'}
               </span>
             </div>
             <h2 className="text-xl font-black">
@@ -272,15 +290,36 @@ export const Form03Page: React.FC<Form03PageProps> = ({
             </h2>
           </div>
 
-          {/* Quick Stats Summary Pills */}
-          <div className="flex items-center gap-3">
-            <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl text-center border border-white/10">
-              <p className="text-[10px] uppercase text-blue-200 font-semibold">GV Tự chấm</p>
-              <p className="text-lg font-black text-amber-300">{grandTotal_Teacher} điểm</p>
+          {/* Quick Stats Summary Pills & Update Buttons */}
+          <div className="flex flex-col sm:flex-row items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl text-center border border-white/10">
+                <p className="text-[10px] uppercase text-blue-200 font-semibold">GV Tự chấm</p>
+                <p className="text-lg font-black text-amber-300">{grandTotal_Teacher} điểm</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl text-center border border-white/10">
+                <p className="text-[10px] uppercase text-blue-200 font-semibold">Hiệu trưởng duyệt</p>
+                <p className="text-lg font-black text-emerald-300">{grandTotal_Principal} điểm</p>
+              </div>
             </div>
-            <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl text-center border border-white/10">
-              <p className="text-[10px] uppercase text-blue-200 font-semibold">Hiệu trưởng duyệt</p>
-              <p className="text-lg font-black text-emerald-300">{grandTotal_Principal} điểm</p>
+
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => handleSave('submitted', `✅ Đã cập nhật điểm Giáo viên tự chấm (${grandTotal_Teacher} điểm) vào File tổng hợp ${teachers.length} Giáo viên!`)}
+                className="px-3 py-2 bg-blue-500/30 hover:bg-blue-500/60 text-white border border-blue-300/40 font-bold text-xs rounded-xl backdrop-blur-sm transition flex items-center gap-1.5 shadow"
+                title="Bấm để cập nhật điểm tự chấm của Giáo viên vào File Tổng hợp"
+              >
+                <CheckSquare className="w-3.5 h-3.5 text-amber-300" />
+                <span>Cập nhật điểm GV</span>
+              </button>
+              <button
+                onClick={() => handleSave('approved', `✅ Đã cập nhật điểm Hiệu trưởng đánh giá (${grandTotal_Principal} điểm) vào File tổng hợp ${teachers.length} Giáo viên!`)}
+                className="px-3 py-2 bg-emerald-500/30 hover:bg-emerald-500/60 text-white border border-emerald-300/40 font-bold text-xs rounded-xl backdrop-blur-sm transition flex items-center gap-1.5 shadow"
+                title="Bấm để Hiệu trưởng phê duyệt & cập nhật điểm vào File Tổng hợp"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-300" />
+                <span>Cập nhật điểm HT</span>
+              </button>
             </div>
           </div>
         </div>
@@ -329,7 +368,7 @@ export const Form03Page: React.FC<Form03PageProps> = ({
               </tr>
 
               {/* PHẦN A CRITERIA ITEMS */}
-              {FORM_03_CRITERIA.filter(c => c.section === 'A').map((item, idx) => {
+              {activeCriteria.filter(c => c.section === 'A').map((item, idx) => {
                 const sc = scores[item.id] || { teacherScore: item.maxPoints, principalScore: item.maxPoints };
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -383,10 +422,17 @@ export const Form03Page: React.FC<Form03PageProps> = ({
               })}
 
               {/* PHẦN B HEADER */}
-              <tr className="bg-slate-200/80 dark:bg-slate-800 font-extrabold text-slate-900 dark:text-slate-100 border-t-2 border-slate-300">
+              <tr className="bg-slate-200/90 dark:bg-slate-800 font-extrabold text-slate-900 dark:text-slate-100 border-t-2 border-slate-300">
                 <td className="p-3 text-center border-r border-slate-300 dark:border-slate-700">B</td>
                 <td className="p-3 border-r border-slate-300 dark:border-slate-700" colSpan={2}>
-                  PHẦN B: NHIỆM VỤ CỤ THỂ VÀ CÔNG TÁC KIÊM NHIỆM (TỐI ĐA 70 ĐIỂM)
+                  <div>
+                    <p className="font-extrabold uppercase text-slate-900 dark:text-slate-100 text-xs sm:text-sm">
+                      PHẦN B: KẾT QUẢ THỰC HIỆN NHIỆM VỤ ĐƯỢC GIAO (TỐI ĐA 70 ĐIỂM)
+                    </p>
+                    <p className="text-[11px] font-normal text-slate-600 dark:text-slate-300 italic mt-0.5 leading-tight">
+                      (Đối với sử dụng phần mềm, phần điểm của mục này được tích hợp vào phần kê khai công việc và chấm điểm thông qua quy đổi công việc chuẩn; phương pháp và cách xác định điểm tiêu chí đánh giá kết quả thực hiện nhiệm vụ đảm bảo theo quy định tại Nghị định số 335/2025/NĐ-CP)
+                    </p>
+                  </div>
                 </td>
                 <td className="p-3 text-center bg-blue-100/70 dark:bg-blue-900/40 text-blue-900 dark:text-blue-200 font-black border-r border-blue-200">
                   {partB_Teacher} / 70đ
@@ -396,57 +442,126 @@ export const Form03Page: React.FC<Form03PageProps> = ({
                 </td>
               </tr>
 
-              {/* PHẦN B CRITERIA ITEMS */}
-              {FORM_03_CRITERIA.filter(c => c.section === 'B').map((item, idx) => {
+              {/* PHẦN B CRITERIA ITEMS & BENCHMARK TIERS */}
+              {activeCriteria.filter(c => c.section === 'B').map((item, idx) => {
                 const sc = scores[item.id] || { teacherScore: item.maxPoints, principalScore: item.maxPoints };
                 return (
-                  <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
-                    <td className="p-3 text-center font-bold text-slate-500 border-r border-slate-200 dark:border-slate-800">
-                      {idx + 1}
-                    </td>
-                    <td className="p-3 border-r border-slate-200 dark:border-slate-800">
-                      <p className="font-bold text-slate-900 dark:text-slate-100">
-                        [{item.code}] {item.title}
-                      </p>
-                      {item.description && (
-                        <p className="text-[11px] text-slate-500 mt-0.5">{item.description}</p>
-                      )}
-                    </td>
-                    <td className="p-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800">
-                      {item.maxPoints}đ
-                    </td>
+                  <React.Fragment key={item.id}>
+                    {/* Hàng chính tiêu chí B.1, B.2, B.3 */}
+                    <tr className="bg-slate-100/90 dark:bg-slate-800/90 font-bold border-t-2 border-slate-300 dark:border-slate-700">
+                      <td className="p-3 text-center font-extrabold text-slate-800 dark:text-slate-100 border-r border-slate-300 dark:border-slate-700">
+                        {idx + 1}
+                      </td>
+                      <td className="p-3 border-r border-slate-300 dark:border-slate-700">
+                        <p className="font-extrabold text-slate-900 dark:text-white uppercase text-xs sm:text-sm">
+                          {item.title}
+                        </p>
+                        {item.description && (
+                          <div className="text-[11px] font-normal text-slate-600 dark:text-slate-300 whitespace-pre-line mt-1.5 bg-white dark:bg-slate-900/70 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700 leading-relaxed shadow-2xs">
+                            {item.description}
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-3 text-center font-black text-slate-900 dark:text-slate-100 border-r border-slate-300 dark:border-slate-700 text-sm">
+                        {item.maxPoints}đ
+                      </td>
 
-                    {/* Cột Giáo viên tự tick */}
-                    <td className="p-3 text-center bg-blue-50/30 dark:bg-blue-950/20 border-r border-blue-100 dark:border-blue-900">
-                      <select
-                        value={sc.teacherScore}
-                        onChange={(e) => handleScoreChange(item.id, 'teacherScore', Number(e.target.value))}
-                        disabled={currentRole === 'principal' && status === 'approved'}
-                        className="w-full py-1.5 px-2 bg-white dark:bg-slate-800 border border-blue-300 dark:border-blue-700 rounded-lg text-center font-bold text-blue-900 dark:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer shadow-2xs"
-                      >
-                        {item.scoreOptions.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt} điểm
-                          </option>
-                        ))}
-                      </select>
-                    </td>
+                      {/* Cột Điểm Giáo viên chọn */}
+                      <td className="p-3 text-center bg-blue-50/50 dark:bg-blue-950/30 border-r border-blue-200 dark:border-blue-900 align-top">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase block">Điểm chọn:</span>
+                          <select
+                            value={sc.teacherScore}
+                            onChange={(e) => handleScoreChange(item.id, 'teacherScore', Number(e.target.value))}
+                            disabled={currentRole === 'principal' && status === 'approved'}
+                            className="w-full py-1.5 px-2 bg-white dark:bg-slate-800 border-2 border-blue-500 rounded-lg text-center font-black text-blue-900 dark:text-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-600 cursor-pointer shadow-2xs text-xs"
+                          >
+                            {item.scoreOptions.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt} điểm
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </td>
 
-                    {/* Cột Hiệu trưởng tự tick */}
-                    <td className="p-3 text-center bg-indigo-50/30 dark:bg-indigo-950/20">
-                      <select
-                        value={sc.principalScore}
-                        onChange={(e) => handleScoreChange(item.id, 'principalScore', Number(e.target.value))}
-                        className="w-full py-1.5 px-2 bg-white dark:bg-slate-800 border border-indigo-300 dark:border-indigo-700 rounded-lg text-center font-bold text-indigo-900 dark:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer shadow-2xs"
-                      >
-                        {item.scoreOptions.map((opt) => (
-                          <option key={opt} value={opt}>
-                            {opt} điểm
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                  </tr>
+                      {/* Cột Điểm Hiệu trưởng duyệt */}
+                      <td className="p-3 text-center bg-indigo-50/50 dark:bg-indigo-950/30 align-top">
+                        <div className="space-y-1">
+                          <span className="text-[10px] font-bold text-indigo-700 dark:text-indigo-300 uppercase block">Điểm duyệt:</span>
+                          <select
+                            value={sc.principalScore}
+                            onChange={(e) => handleScoreChange(item.id, 'principalScore', Number(e.target.value))}
+                            className="w-full py-1.5 px-2 bg-white dark:bg-slate-800 border-2 border-indigo-500 rounded-lg text-center font-black text-indigo-900 dark:text-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-600 cursor-pointer shadow-2xs text-xs"
+                          >
+                            {item.scoreOptions.map((opt) => (
+                              <option key={opt} value={opt}>
+                                {opt} điểm
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </td>
+                    </tr>
+
+                    {/* Dòng danh sách các Mức Điểm Chuẩn (a, b, c, d, đ, e, g) */}
+                    {item.tiers && item.tiers.map((tier) => {
+                      const isTeacherSelected = sc.teacherScore === tier.points;
+                      const isPrincipalSelected = sc.principalScore === tier.points;
+
+                      return (
+                        <tr
+                          key={tier.code}
+                          className={`text-xs transition border-t border-slate-200/60 dark:border-slate-800/60 ${
+                            isTeacherSelected || isPrincipalSelected
+                              ? 'bg-amber-50/70 dark:bg-amber-950/30'
+                              : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
+                          }`}
+                        >
+                          <td className="py-2 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800">
+                            {tier.code}
+                          </td>
+                          <td className="py-2 px-3 border-r border-slate-200 dark:border-slate-800">
+                            <span className="text-slate-800 dark:text-slate-200 font-medium">{tier.label}</span>
+                          </td>
+                          <td className="py-2 px-3 text-center font-bold text-slate-700 dark:text-slate-300 border-r border-slate-200 dark:border-slate-800">
+                            {tier.points}
+                          </td>
+
+                          {/* Nút bấm chọn nhanh điểm GV */}
+                          <td className="py-1.5 px-2 text-center border-r border-blue-100 dark:border-blue-900 bg-blue-50/20 dark:bg-blue-950/20">
+                            <button
+                              type="button"
+                              onClick={() => handleScoreChange(item.id, 'teacherScore', tier.points)}
+                              disabled={currentRole === 'principal' && status === 'approved'}
+                              className={`w-full py-1 px-2 rounded-md font-bold text-[11px] transition flex items-center justify-center gap-1 ${
+                                isTeacherSelected
+                                  ? 'bg-blue-600 text-white shadow-xs ring-1 ring-blue-700'
+                                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-blue-100 dark:hover:bg-blue-900/40 border border-slate-200 dark:border-slate-700'
+                              }`}
+                            >
+                              {isTeacherSelected ? `✓ Mức ${tier.code} (${tier.points}đ)` : `Mức ${tier.code} (${tier.points}đ)`}
+                            </button>
+                          </td>
+
+                          {/* Nút bấm chọn nhanh điểm Hiệu trưởng */}
+                          <td className="py-1.5 px-2 text-center bg-indigo-50/20 dark:bg-indigo-950/20">
+                            <button
+                              type="button"
+                              onClick={() => handleScoreChange(item.id, 'principalScore', tier.points)}
+                              className={`w-full py-1 px-2 rounded-md font-bold text-[11px] transition flex items-center justify-center gap-1 ${
+                                isPrincipalSelected
+                                  ? 'bg-indigo-600 text-white shadow-xs ring-1 ring-indigo-700'
+                                  : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 border border-slate-200 dark:border-slate-700'
+                              }`}
+                            >
+                              {isPrincipalSelected ? `✓ Mức ${tier.code} (${tier.points}đ)` : `Mức ${tier.code} (${tier.points}đ)`}
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </React.Fragment>
                 );
               })}
 
@@ -468,7 +583,7 @@ export const Form03Page: React.FC<Form03PageProps> = ({
                   +{bonus_Principal}đ
                 </td>
               </tr>
-              {FORM_03_CRITERIA.filter(c => c.section === 'BONUS').map((item, idx) => {
+              {activeCriteria.filter(c => c.section === 'BONUS').map((item, idx) => {
                 const sc = scores[item.id] || { teacherScore: 0, principalScore: 0, note: '' };
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -543,7 +658,7 @@ export const Form03Page: React.FC<Form03PageProps> = ({
                   -{deduction_Principal}đ
                 </td>
               </tr>
-              {FORM_03_CRITERIA.filter(c => c.section === 'DEDUCTION').map((item, idx) => {
+              {activeCriteria.filter(c => c.section === 'DEDUCTION').map((item, idx) => {
                 const sc = scores[item.id] || { teacherScore: 0, principalScore: 0, note: '' };
                 return (
                   <tr key={item.id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition">
@@ -605,10 +720,10 @@ export const Form03Page: React.FC<Form03PageProps> = ({
                 <td className="p-4 text-center border-r border-slate-700" colSpan={3}>
                   <div>
                     <p className="text-sm font-black text-white uppercase">
-                      TỔNG ĐIỂM THI ĐUA (PHẦN A TỐI ĐA 30Đ + PHẦN B TỐI ĐA 70Đ = TỐI ĐA 100Đ)
+                      TỔNG ĐIỂM THI ĐUA (TỔNG = PHẦN A [TỐI ĐA 30Đ: A.1-A.27] + PHẦN B [TỐI ĐA 70Đ: B.1-B.3] = TỐI ĐA 100Đ)
                     </p>
                     <p className="text-[11px] font-normal text-slate-300 italic mt-0.5">
-                      * Điểm cộng (+{bonus_Principal}đ) và điểm trừ (-{deduction_Principal}đ) được ghi nhận độc lập vào hệ thống & Bảng tổng hợp.
+                      * Điểm cộng (+{bonus_Principal}đ) và điểm trừ (-{deduction_Principal}đ) được ghi nhận độc lập vào Hệ thống & Bảng tổng hợp thi đua hàng tháng.
                     </p>
                   </div>
                 </td>
@@ -624,46 +739,103 @@ export const Form03Page: React.FC<Form03PageProps> = ({
           </table>
         </div>
 
+        {/* NÚT CẬP NHẬT ĐIỂM TỰ ĐÁNH GIÁ CỦA GIÁO VIÊN VÀ HIỆU TRƯỞNG BÊN DƯỚI TỔNG ĐIỂM */}
+        <div className="p-5 bg-gradient-to-r from-blue-900/15 via-slate-100 to-emerald-900/15 dark:from-blue-950/50 dark:via-slate-800 dark:to-emerald-950/50 border-t-2 border-b-2 border-slate-300 dark:border-slate-700 flex flex-col lg:flex-row items-center justify-between gap-4 my-1">
+          <div className="flex items-center gap-3">
+            <div className="p-3 bg-blue-600 text-white rounded-2xl shadow-md shrink-0">
+              <RefreshCw className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wide">
+                CẬP NHẬT ĐIỂM TỰ ĐÁNH GIÁ VÀO FILE TỔNG HỢP {teachers.length} GIÁO VIÊN (THÁNG {selectedMonth}/2026)
+              </p>
+              <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
+                Bấm các nút dưới đây để đồng bộ ngay lập tức điểm Tự chấm của GV hoặc điểm Hiệu trưởng đánh giá vào Bảng tổng hợp thi đua.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto shrink-0">
+            {/* Nút Cập nhật điểm Giáo viên tự chấm */}
+            <button
+              onClick={() => handleSave('submitted', `✅ Đã cập nhật điểm Giáo viên tự chấm (${grandTotal_Teacher} điểm) và lưu vào File tổng hợp ${teachers.length} Giáo viên!`)}
+              className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black text-xs rounded-xl shadow-lg hover:shadow-blue-500/20 transition flex items-center justify-center gap-2"
+            >
+              <CheckSquare className="w-4 h-4 text-amber-300 shrink-0" />
+              <span>CẬP NHẬT ĐIỂM GV TỰ CHẤM ({grandTotal_Teacher} ĐIỂM)</span>
+            </button>
+
+            {/* Nút Cập nhật điểm Hiệu trưởng đánh giá */}
+            <button
+              onClick={() => handleSave('approved', `✅ Đã cập nhật điểm Hiệu trưởng đánh giá (${grandTotal_Principal} điểm) và phê duyệt lưu vào File tổng hợp ${teachers.length} Giáo viên!`)}
+              className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs rounded-xl shadow-lg hover:shadow-emerald-500/20 transition flex items-center justify-center gap-2"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-200 shrink-0" />
+              <span>CẬP NHẬT ĐIỂM HIỆU TRƯỞNG DƯỆT ({grandTotal_Principal} ĐIỂM)</span>
+            </button>
+          </div>
+        </div>
+
         {/* Dynamic Classification Summary Box */}
         <div className="p-6 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             {/* Giáo viên tự xếp loại */}
-            <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700">
-              <p className="text-xs font-bold text-slate-500 uppercase mb-1">
-                Giáo viên tự xếp loại theo Mẫu:
-              </p>
-              <div className="flex items-center justify-between mt-2">
-                <div>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-black border ${
-                    CLASSIFICATION_RULES.find(r => r.type === teacherClass)?.badgeColor
-                  }`}>
-                    {getClassificationLabel(teacherClass)}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Dựa trên tổng điểm tự chấm: <strong>{grandTotal_Teacher} điểm</strong>
-                  </p>
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase mb-1">
+                  Giáo viên tự xếp loại theo Mẫu:
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <div>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-black border ${
+                      CLASSIFICATION_RULES.find(r => r.type === teacherClass)?.badgeColor
+                    }`}>
+                      {getClassificationLabel(teacherClass)}
+                    </span>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Dựa trên tổng điểm tự chấm: <strong>{grandTotal_Teacher} điểm</strong>
+                    </p>
+                  </div>
                 </div>
               </div>
+
+              <button
+                onClick={() => handleSave('submitted', `✅ Đã cập nhật điểm Giáo viên tự chấm (${grandTotal_Teacher} điểm) vào File tổng hợp ${teachers.length} Giáo viên!`)}
+                className="w-full mt-4 px-3 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5"
+              >
+                <Save className="w-4 h-4 text-amber-300" />
+                <span>Cập nhật điểm GV tự chấm ({grandTotal_Teacher}đ) -&gt; File tổng hợp</span>
+              </button>
             </div>
 
             {/* Hiệu trưởng xếp loại */}
-            <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700">
-              <p className="text-xs font-bold text-slate-500 uppercase mb-1">
-                Hiệu trưởng phê duyệt xếp loại chính thức:
-              </p>
-              <div className="flex items-center justify-between mt-2">
-                <div>
-                  <span className={`inline-block px-3 py-1 rounded-full text-xs font-black border ${
-                    CLASSIFICATION_RULES.find(r => r.type === principalClass)?.badgeColor
-                  }`}>
-                    {getClassificationLabel(principalClass)}
-                  </span>
-                  <p className="text-xs text-slate-500 mt-1">
-                    Dựa trên điểm Hiệu trưởng duyệt: <strong>{grandTotal_Principal} điểm</strong>
-                  </p>
+            <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
+              <div>
+                <p className="text-xs font-bold text-slate-500 uppercase mb-1">
+                  Hiệu trưởng phê duyệt xếp loại chính thức:
+                </p>
+                <div className="flex items-center justify-between mt-2">
+                  <div>
+                    <span className={`inline-block px-3 py-1 rounded-full text-xs font-black border ${
+                      CLASSIFICATION_RULES.find(r => r.type === principalClass)?.badgeColor
+                    }`}>
+                      {getClassificationLabel(principalClass)}
+                    </span>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Dựa trên điểm Hiệu trưởng duyệt: <strong>{grandTotal_Principal} điểm</strong>
+                    </p>
+                  </div>
                 </div>
               </div>
+
+              <button
+                onClick={() => handleSave('approved', `✅ Đã cập nhật điểm Hiệu trưởng đánh giá (${grandTotal_Principal} điểm) vào File tổng hợp ${teachers.length} Giáo viên!`)}
+                className="w-full mt-4 px-3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow transition flex items-center justify-center gap-1.5"
+              >
+                <ShieldCheck className="w-4 h-4 text-emerald-200" />
+                <span>Cập nhật điểm Hiệu trưởng duyệt ({grandTotal_Principal}đ) -&gt; File tổng hợp</span>
+              </button>
             </div>
 
           </div>

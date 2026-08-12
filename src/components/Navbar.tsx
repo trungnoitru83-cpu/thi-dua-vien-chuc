@@ -30,8 +30,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const roleLabel = {
     teacher: 'Giáo viên',
     department_head: 'Tổ trưởng chuyên môn',
-    principal: 'Hiệu trưởng / Ban giám hiệu'
-  }[currentRole];
+    principal: 'Hiệu trưởng / Ban giám hiệu',
+    staff: 'Nhân viên / Cán bộ'
+  }[currentRole] || 'Cán bộ';
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs">
@@ -94,7 +95,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span>Trang 3: Bảng Chấm Mẫu 03</span>
+                <span>Trang 3: Bảng Chấm Điểm</span>
               </button>
 
               <button

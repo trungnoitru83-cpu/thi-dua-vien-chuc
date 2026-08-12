@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ShieldCheck, User, Users, ArrowRight, BookOpen, AlertTriangle, CheckCircle, X, Search, KeyRound } from 'lucide-react';
+import { Mail, Lock, ShieldCheck, User, Users, ArrowRight, BookOpen, AlertTriangle, CheckCircle, X, Search, KeyRound, UserCheck } from 'lucide-react';
 import { Teacher, Role } from '../types';
 import { auth } from '../lib/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
@@ -27,6 +27,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [googleSuccessMsg, setGoogleSuccessMsg] = useState('');
   const [googleModalError, setGoogleModalError] = useState('');
 
+  // Change Password Modal State
+  const [isChangePassModalOpen, setIsChangePassModalOpen] = useState(false);
+  const [changePassEmail, setChangePassEmail] = useState('');
+  const [currentPassInput, setCurrentPassInput] = useState('');
+  const [newPassInput, setNewPassInput] = useState('');
+  const [confirmNewPassInput, setConfirmNewPassInput] = useState('');
+  const [changePassError, setChangePassError] = useState('');
+  const [changePassSuccess, setChangePassSuccess] = useState('');
+
+  // Password verification helper (checks localStorage custom passwords first, then defaults '123456' / 'nuocoa2026')
+  const verifyPassword = (cleanEmail: string, inputPass: string): boolean => {
+    const cleanInput = inputPass.trim();
+    try {
+      const customPasswords = JSON.parse(localStorage.getItem('nuocoa_user_passwords') || '{}');
+      if (customPasswords[cleanEmail]) {
+        return cleanInput === customPasswords[cleanEmail];
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return cleanInput === '123456' || cleanInput === 'nuocoa2026';
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage('');
@@ -44,25 +67,92 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       return;
     }
 
-    // 1. Strict Verification: Check if Email exists in 36 Teacher Directory
+    // 1. Strict Verification: Check if Email exists in Teacher Directory
     const foundTeacher = teachers.find(
       t => t.email.toLowerCase() === cleanEmail
     );
 
     if (!foundTeacher) {
-      setErrorMessage(`⛔ ĐĂNG NHẬP THẤT BẠI: Địa chỉ Email Google "${email}" KHÔNG TỒN TẠI trong danh sách 36 cán bộ giáo viên trường Nước Oa. Vui lòng kiểm tra lại tài khoản.`);
+      setErrorMessage(`⛔ ĐĂNG NHẬP THẤT BẠI: Địa chỉ Email Google "${email}" KHÔNG TỒN TẠI trong danh sách ${teachers.length} cán bộ giáo viên trường Nước Oa. Vui lòng kiểm tra lại tài khoản.`);
       return;
     }
 
     // 2. Strict Verification: Check Password
-    // Allowed default passwords for teachers: '123456' or 'nuocoa2026'
-    if (cleanPassword !== '123456' && cleanPassword !== 'nuocoa2026') {
+    if (!verifyPassword(cleanEmail, cleanPassword)) {
       setErrorMessage(`⛔ SAI MẬT KHẨU: Mật khẩu bạn nhập cho tài khoản Google "${foundTeacher.email}" KHÔNG CHÍNH XÁC. Hệ thống không cho phép truy cập!`);
       return;
     }
 
     // Both email & password match registered teacher -> Grant access
     onLogin(foundTeacher, role);
+  };
+
+  const handleChangePasswordSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setChangePassError('');
+    setChangePassSuccess('');
+
+    const cleanEmail = changePassEmail.trim().toLowerCase();
+    const cleanCurrent = currentPassInput.trim();
+    const cleanNew = newPassInput.trim();
+    const cleanConfirm = confirmNewPassInput.trim();
+
+    if (!cleanEmail) {
+      setChangePassError('Vui lòng chọn hoặc nhập Email tài khoản cần đổi mật khẩu!');
+      return;
+    }
+
+    const found = teachers.find(t => t.email.toLowerCase() === cleanEmail);
+    if (!found) {
+      setChangePassError(`⛔ Email "${cleanEmail}" không thuộc danh sách cán bộ nhà trường.`);
+      return;
+    }
+
+    if (!cleanCurrent) {
+      setChangePassError('Vui lòng nhập Mật khẩu hiện tại!');
+      return;
+    }
+
+    if (!verifyPassword(cleanEmail, cleanCurrent)) {
+      setChangePassError('⛔ Mật khẩu hiện tại không chính xác! Vui lòng kiểm tra lại.');
+      return;
+    }
+
+    if (!cleanNew) {
+      setChangePassError('Vui lòng nhập Mật khẩu mới!');
+      return;
+    }
+
+    if (cleanNew.length < 6) {
+      setChangePassError('Mật khẩu mới phải có tối thiểu 6 ký tự!');
+      return;
+    }
+
+    if (cleanNew !== cleanConfirm) {
+      setChangePassError('⛔ Mật khẩu mới và Nhập lại mật khẩu mới KHÔNG TRÙNG KHỚP!');
+      return;
+    }
+
+    // Save to localStorage
+    try {
+      const customPasswords = JSON.parse(localStorage.getItem('nuocoa_user_passwords') || '{}');
+      customPasswords[cleanEmail] = cleanNew;
+      localStorage.setItem('nuocoa_user_passwords', JSON.stringify(customPasswords));
+      
+      setChangePassSuccess(`✅ Đã đổi mật khẩu thành công cho cán bộ ${found.fullName}!`);
+      setEmail(found.email);
+      setPassword(cleanNew);
+
+      setTimeout(() => {
+        setIsChangePassModalOpen(false);
+        setCurrentPassInput('');
+        setNewPassInput('');
+        setConfirmNewPassInput('');
+        setChangePassSuccess('');
+      }, 1500);
+    } catch (err) {
+      setChangePassError('Không thể lưu mật khẩu mới. Vui lòng thử lại!');
+    }
   };
 
   // Real Firebase Google Login Popup Handler
@@ -84,7 +174,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       if (!found) {
         // Sign out immediately
         await auth.signOut();
-        setErrorMessage(`⛔ HỆ THỐNG TỪ CHỐI TRUY CẬP: Tài khoản Google (${userGoogleEmail}) KHÔNG THUỘC danh sách 36 cán bộ giáo viên Nước Oa. Hệ thống không cho phép truy cập!`);
+        setErrorMessage(`⛔ HỆ THỐNG TỪ CHỐI TRUY CẬP: Tài khoản Google (${userGoogleEmail}) KHÔNG THUỘC danh sách cán bộ giáo viên Nước Oa. Hệ thống không cho phép truy cập!`);
         return;
       }
 
@@ -123,15 +213,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setTimeout(() => {
       setIsLinkingGoogle(false);
       
-      // Strict verification against 36 teachers list
+      // Strict verification against teachers list
       const found = teachers.find(t => t.email.toLowerCase() === cleanGoogleEmail);
 
       if (!found) {
-        setGoogleModalError(`⛔ ĐĂNG NHẬP THẤT BẠI: Tài khoản Google "${cleanGoogleEmail}" KHÔNG HỢP LỆ hoặc chưa được cấp quyền trong hệ thống 36 cán bộ giáo viên Nước Oa!`);
+        setGoogleModalError(`⛔ ĐĂNG NHẬP THẤT BẠI: Tài khoản Google "${cleanGoogleEmail}" KHÔNG HỢP LỆ hoặc chưa được cấp quyền trong hệ thống cán bộ giáo viên Nước Oa!`);
         return;
       }
 
-      if (cleanGooglePassword !== '123456' && cleanGooglePassword !== 'nuocoa2026') {
+      if (!verifyPassword(cleanGoogleEmail, cleanGooglePassword)) {
         setGoogleModalError(`⛔ SAI MẬT KHẨU: Mật khẩu nhập cho tài khoản Google "${cleanGoogleEmail}" không chính xác. Hệ thống từ chối truy cập!`);
         return;
       }
@@ -166,7 +256,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               Phần Mềm Chấm Thi Đua Hàng Tháng
             </h1>
             <p className="text-xs sm:text-sm text-blue-200 max-w-xl mt-1">
-              Xác thực tài khoản Google giáo viên - Đánh giá công khai, minh bạch & chính xác.
+              Xác thực tài khoản Google giáo viên & cán bộ nhân viên - Đánh giá công khai, minh bạch & chính xác.
             </p>
           </div>
 
@@ -191,7 +281,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             Đăng Nhập Tài Khoản
           </h2>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Chỉ tài khoản Email Google hợp lệ của giáo viên mới được truy cập
+            Chỉ tài khoản Email Google hợp lệ của cán bộ giáo viên mới được truy cập
           </p>
         </div>
 
@@ -211,7 +301,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
             <span className="flex items-center gap-1.5">
               <Search className="w-3.5 h-3.5 text-blue-600" />
-              <span>Chọn nhanh Email Google Cán bộ ({teachers.length} GV):</span>
+              <span>Chọn nhanh Email Cán bộ ({teachers.length} người):</span>
             </span>
             <span className="text-[10px] text-blue-600 font-semibold">Tự động điền Email</span>
           </label>
@@ -224,7 +314,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             }}
             className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
           >
-            <option value="">-- Chọn giáo viên từ danh sách 36 cán bộ --</option>
+            <option value="">-- Chọn cán bộ/giáo viên từ danh sách --</option>
             {teachers.map((t, idx) => (
               <option key={t.id} value={t.email}>
                 {idx + 1}. {t.fullName} ({t.email})
@@ -255,13 +345,28 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           </div>
 
-          {/* Password Input */}
+          {/* Password Input & Change Password Button */}
           <div>
             <div className="flex items-center justify-between mb-1.5">
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                 Mật khẩu đăng nhập
               </label>
-              <span className="text-[10px] text-slate-400 font-medium">(Mật khẩu mặc định: <code className="bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded text-blue-600 dark:text-blue-400 font-bold">123456</code>)</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setChangePassEmail(email || teachers[0]?.email || '');
+                  setCurrentPassInput('');
+                  setNewPassInput('');
+                  setConfirmNewPassInput('');
+                  setChangePassError('');
+                  setChangePassSuccess('');
+                  setIsChangePassModalOpen(true);
+                }}
+                className="text-[11px] text-blue-600 dark:text-blue-400 font-bold hover:underline flex items-center gap-1"
+              >
+                <KeyRound className="w-3.5 h-3.5 text-amber-500" />
+                <span>Đổi mật khẩu hiện tại</span>
+              </button>
             </div>
             <div className="relative">
               <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-3.5 pointer-events-none" />
@@ -278,19 +383,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           </div>
 
-          {/* Role Selection */}
+          {/* Role Selection (4 Roles: Giáo viên, Tổ trưởng, Nhân viên, Hiệu trưởng) */}
           <div>
             <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
               Vai trò truy cập hệ thống
             </label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setRole('teacher')}
                 className={`p-2.5 rounded-xl border text-center transition ${
                   role === 'teacher'
-                    ? 'bg-blue-50 border-blue-600 text-blue-700 font-bold dark:bg-blue-950 dark:text-blue-300 dark:border-blue-500'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+                    ? 'bg-blue-50 border-blue-600 text-blue-700 font-bold dark:bg-blue-950 dark:text-blue-300 dark:border-blue-500 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 hover:bg-slate-100'
                 }`}
               >
                 <User className="w-4 h-4 mx-auto mb-1" />
@@ -302,8 +407,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 onClick={() => setRole('department_head')}
                 className={`p-2.5 rounded-xl border text-center transition ${
                   role === 'department_head'
-                    ? 'bg-indigo-50 border-indigo-600 text-indigo-700 font-bold dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-500'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+                    ? 'bg-indigo-50 border-indigo-600 text-indigo-700 font-bold dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-500 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 hover:bg-slate-100'
                 }`}
               >
                 <Users className="w-4 h-4 mx-auto mb-1" />
@@ -312,11 +417,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
               <button
                 type="button"
+                onClick={() => setRole('staff')}
+                className={`p-2.5 rounded-xl border text-center transition ${
+                  role === 'staff'
+                    ? 'bg-emerald-50 border-emerald-600 text-emerald-700 font-bold dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-500 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 hover:bg-slate-100'
+                }`}
+              >
+                <UserCheck className="w-4 h-4 mx-auto mb-1" />
+                <span className="text-[11px]">Nhân viên</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setRole('principal')}
                 className={`p-2.5 rounded-xl border text-center transition ${
                   role === 'principal'
-                    ? 'bg-amber-50 border-amber-600 text-amber-700 font-bold dark:bg-amber-950 dark:text-amber-300 dark:border-amber-500'
-                    : 'bg-slate-50 border-slate-200 text-slate-600 text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400'
+                    ? 'bg-amber-50 border-amber-600 text-amber-700 font-bold dark:bg-amber-950 dark:text-amber-300 dark:border-amber-500 shadow-xs'
+                    : 'bg-slate-50 border-slate-200 text-slate-600 text-xs dark:bg-slate-800 dark:border-slate-700 dark:text-slate-400 hover:bg-slate-100'
                 }`}
               >
                 <ShieldCheck className="w-4 h-4 mx-auto mb-1" />
@@ -334,6 +452,24 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <ArrowRight className="w-4 h-4" />
           </button>
         </form>
+
+        {/* Change Password Banner Action */}
+        <button
+          type="button"
+          onClick={() => {
+            setChangePassEmail(email || teachers[0]?.email || '');
+            setCurrentPassInput('');
+            setNewPassInput('');
+            setConfirmNewPassInput('');
+            setChangePassError('');
+            setChangePassSuccess('');
+            setIsChangePassModalOpen(true);
+          }}
+          className="w-full mt-3 py-2 px-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl flex items-center justify-center gap-2 transition border border-slate-200 dark:border-slate-700"
+        >
+          <KeyRound className="w-4 h-4 text-amber-500" />
+          <span>Đổi mật khẩu tài khoản hiện tại</span>
+        </button>
 
         {/* Divider */}
         <div className="relative my-6">
@@ -376,6 +512,154 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </button>
 
       </div>
+
+      {/* Change Password Modal */}
+      {isChangePassModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 sm:p-7 max-w-md w-full shadow-2xl border border-slate-200 dark:border-slate-800 relative animate-in fade-in zoom-in-95">
+            
+            <button
+              onClick={() => {
+                setIsChangePassModalOpen(false);
+                setChangePassError('');
+                setChangePassSuccess('');
+              }}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="p-3 bg-amber-100 dark:bg-amber-950 text-amber-600 dark:text-amber-400 rounded-2xl shrink-0">
+                <KeyRound className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                  Đổi Mật Khẩu Hiện Tại
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Cập nhật mật khẩu mới cho tài khoản cán bộ giáo viên
+                </p>
+              </div>
+            </div>
+
+            {changePassError && (
+              <div className="mb-4 p-3 bg-rose-50 dark:bg-rose-950/80 text-rose-800 dark:text-rose-200 rounded-2xl text-xs font-bold border border-rose-300 dark:border-rose-800 flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                <span>{changePassError}</span>
+              </div>
+            )}
+
+            {changePassSuccess ? (
+              <div className="py-6 text-center space-y-2">
+                <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto animate-bounce" />
+                <p className="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">
+                  {changePassSuccess}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Đang tự động điền mật khẩu mới vào ô đăng nhập...
+                </p>
+              </div>
+            ) : (
+              <form onSubmit={handleChangePasswordSubmit} className="space-y-4">
+                {/* Select Account */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Chọn tài khoản Cán bộ / Giáo viên
+                  </label>
+                  <select
+                    value={changePassEmail}
+                    onChange={(e) => {
+                      setChangePassEmail(e.target.value);
+                      setChangePassError('');
+                    }}
+                    className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  >
+                    <option value="">-- Chọn cán bộ cần đổi mật khẩu --</option>
+                    {teachers.map((t) => (
+                      <option key={t.id} value={t.email}>
+                        {t.fullName} ({t.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Current Password */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Mật khẩu hiện tại
+                  </label>
+                  <input
+                    type="password"
+                    value={currentPassInput}
+                    onChange={(e) => {
+                      setCurrentPassInput(e.target.value);
+                      setChangePassError('');
+                    }}
+                    placeholder="Mật khẩu hiện tại (VD: 123456)"
+                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                {/* New Password */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Mật khẩu mới (Tối thiểu 6 ký tự)
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassInput}
+                    onChange={(e) => {
+                      setNewPassInput(e.target.value);
+                      setChangePassError('');
+                    }}
+                    placeholder="Nhập mật khẩu mới"
+                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                {/* Confirm New Password */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
+                    Xác nhận mật khẩu mới
+                  </label>
+                  <input
+                    type="password"
+                    value={confirmNewPassInput}
+                    onChange={(e) => {
+                      setConfirmNewPassInput(e.target.value);
+                      setChangePassError('');
+                    }}
+                    placeholder="Nhập lại mật khẩu mới"
+                    className="w-full px-3.5 py-2 bg-slate-50 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                  />
+                </div>
+
+                <div className="flex items-center justify-end gap-2 pt-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsChangePassModalOpen(false);
+                      setChangePassError('');
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
+                  >
+                    Hủy bỏ
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5 shadow-md shadow-amber-600/30"
+                  >
+                    <KeyRound className="w-4 h-4" />
+                    <span>Lưu Mật Khẩu Mới</span>
+                  </button>
+                </div>
+              </form>
+            )}
+
+          </div>
+        </div>
+      )}
 
       {/* Google Link & Verification Modal */}
       {isGoogleModalOpen && (
@@ -472,7 +756,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                 <div className="p-3 bg-amber-50 dark:bg-amber-950/60 rounded-xl text-[11px] text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 flex items-start gap-2">
                   <KeyRound className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                   <span>
-                    <strong>Quy định bảo mật:</strong> Nếu thông tin Email Google hoặc Mật khẩu không đúng với thông tin giáo viên đăng ký, hệ thống sẽ <strong>từ chối hoàn toàn</strong> không cho truy cập.
+                    <strong>Quy định bảo mật:</strong> Nếu thông tin Email Google hoặc Mật khẩu không đúng với thông tin cán bộ giáo viên đăng ký, hệ thống sẽ <strong>từ chối hoàn toàn</strong> không cho truy cập.
                   </span>
                 </div>
 
@@ -502,4 +786,5 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     </div>
   );
 };
+
 

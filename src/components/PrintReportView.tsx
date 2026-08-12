@@ -1,7 +1,8 @@
 import React from 'react';
-import { Printer, X } from 'lucide-react';
+import { Printer, X, FileText } from 'lucide-react';
 import { Teacher, Form01Data, Form03Evaluation } from '../types';
-import { FORM_03_CRITERIA, getClassification, getClassificationLabel } from '../data/form03Criteria';
+import { FORM_03_CRITERIA, getClassification, getClassificationLabel, getCriteriaForTeacher, isLeaderTeacher } from '../data/form03Criteria';
+import { exportToWord } from '../lib/wordExport';
 
 interface PrintReportViewProps {
   type: 'form01' | 'form03' | 'summary';
@@ -32,6 +33,19 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
     window.print();
   };
 
+  const handleExportWord = () => {
+    const reportElement = document.getElementById('printable-report-area');
+    if (reportElement) {
+      const fileName = type === 'form03' 
+        ? `Mau_${isLeaderTeacher(currentTeacher) ? '02' : '03'}_${currentTeacher?.fullName.replace(/\s+/g, '_')}_Thang_${selectedMonth}`
+        : type === 'form01'
+        ? `Mau_01_${currentTeacher?.fullName.replace(/\s+/g, '_')}_Thang_${selectedMonth}`
+        : `Bang_Tong_Hop_Thi_Dua_36_GV_Thang_${selectedMonth}`;
+
+      exportToWord(reportElement.innerHTML, fileName);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-black/70 backdrop-blur-xs flex justify-center p-4 print:p-0 print:bg-white print:static print:inset-auto">
       
@@ -44,6 +58,15 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
           <Printer className="w-4 h-4" />
           <span>In trang này ngay (A4)</span>
         </button>
+
+        <button
+          onClick={handleExportWord}
+          className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition"
+        >
+          <FileText className="w-4 h-4" />
+          <span>Xuất file Word (.doc/.docx)</span>
+        </button>
+
         <button
           onClick={onClose}
           className="p-2 text-slate-500 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-xl transition"
@@ -53,7 +76,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
       </div>
 
       {/* Printable Paper A4 Page Container */}
-      <div className="bg-white text-slate-900 w-full max-w-[800px] min-h-[1050px] p-8 sm:p-12 shadow-2xl rounded-xl print:shadow-none print:w-full print:max-w-none print:p-0 my-8 print:my-0 font-serif">
+      <div id="printable-report-area" className="bg-white text-slate-900 w-full max-w-[800px] min-h-[1050px] p-8 sm:p-12 shadow-2xl rounded-xl print:shadow-none print:w-full print:max-w-none print:p-0 my-8 print:my-0 font-serif">
         
         {/* Document Header (Quốc Hiệu & Tiêu Ngữ) */}
         <div className="flex justify-between items-start text-xs border-b border-slate-300 pb-4 mb-6">
@@ -71,77 +94,98 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
         </div>
 
         {/* PRINT FORM 03 DETAILS */}
-        {type === 'form03' && currentTeacher && evaluation && (
-          <div>
-            <div className="text-center my-6">
-              <h1 className="text-base font-bold uppercase tracking-wide text-slate-900">
-                BẢNG ĐÁNH GIÁ VÀ XẾP LOẠI THI ĐUA THÁNG {selectedMonth} NĂM 2026
-              </h1>
-              <p className="text-xs italic font-sans text-slate-600 mt-1">(Theo Mẫu số 03 quy định thi đua ngành giáo dục)</p>
-            </div>
+        {type === 'form03' && currentTeacher && evaluation && (() => {
+          const isLeader = isLeaderTeacher(currentTeacher);
+          const printCriteria = getCriteriaForTeacher(currentTeacher);
 
-            {/* Profile Summary */}
-            <div className="text-xs space-y-1.5 mb-6 font-sans bg-slate-50 p-4 rounded-lg border border-slate-200">
-              <div className="grid grid-cols-2 gap-2">
-                <p><strong>1. Họ và tên giáo viên:</strong> {currentTeacher.fullName}</p>
-                <p><strong>2. Ngày tháng năm sinh:</strong> {currentTeacher.dob}</p>
-                <p><strong>3. Bộ môn giảng dạy:</strong> {currentTeacher.subject}</p>
-                <p><strong>4. Tổ chuyên môn:</strong> {currentTeacher.department}</p>
+          return (
+            <div>
+              <div className="text-center my-6">
+                <h1 className="text-base font-bold uppercase tracking-wide text-slate-900">
+                  BẢNG ĐÁNH GIÁ VÀ XẾP LOẠI THI ĐUA THÁNG {selectedMonth} NĂM 2026
+                </h1>
+                <p className="text-xs italic font-sans text-slate-600 mt-1">
+                  ({isLeader ? 'Theo Mẫu số 02 quy định thi đua dành cho Cán bộ quản lý / Tổ trưởng' : 'Theo Mẫu số 03 quy định thi đua ngành giáo dục'})
+                </p>
               </div>
-              <p><strong>5. Trường công tác:</strong> {currentTeacher.school}</p>
-            </div>
 
-            {/* Criteria Table */}
-            <table className="w-full text-xs border-collapse border border-slate-800 mb-6 font-sans">
-              <thead>
-                <tr className="bg-slate-100 font-bold uppercase text-center border-b border-slate-800">
-                  <th className="border border-slate-800 p-2 w-10">STT</th>
-                  <th className="border border-slate-800 p-2">Nội dung thi đua đánh giá</th>
-                  <th className="border border-slate-800 p-2 w-16">Tối đa</th>
-                  <th className="border border-slate-800 p-2 w-20">GV tự chấm</th>
-                  <th className="border border-slate-800 p-2 w-20">HT Duyệt</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="font-bold bg-slate-50">
-                  <td className="border border-slate-800 p-1.5 text-center">A</td>
-                  <td className="border border-slate-800 p-1.5" colSpan={2}>PHẦN A: NHIỆM VỤ CHUNG VÀ CHUYÊN MÔN (TỐI ĐA 30 ĐIỂM)</td>
-                  <td className="border border-slate-800 p-1.5 text-center">{Math.min(30, evaluation.totalPartA_Teacher)}đ</td>
-                  <td className="border border-slate-800 p-1.5 text-center">{Math.min(30, evaluation.totalPartA_Principal)}đ</td>
-                </tr>
+              {/* Profile Summary */}
+              <div className="text-xs space-y-1.5 mb-6 font-sans bg-slate-50 p-4 rounded-lg border border-slate-200">
+                <div className="grid grid-cols-2 gap-2">
+                  <p><strong>1. Họ và tên:</strong> {currentTeacher.fullName}</p>
+                  <p><strong>2. Ngày tháng năm sinh:</strong> {currentTeacher.dob}</p>
+                  <p><strong>3. Chức vụ / Bộ môn:</strong> {currentTeacher.position ? `${currentTeacher.position} (${currentTeacher.subject})` : currentTeacher.subject}</p>
+                  <p><strong>4. Tổ chuyên môn:</strong> {currentTeacher.department}</p>
+                </div>
+                <p><strong>5. Trường công tác:</strong> {currentTeacher.school}</p>
+              </div>
 
-                {FORM_03_CRITERIA.filter(c => c.section === 'A').map((c, i) => {
-                  const sc = evaluation.scores[c.id] || { teacherScore: c.maxPoints, principalScore: c.maxPoints };
-                  return (
-                    <tr key={c.id}>
-                      <td className="border border-slate-800 p-1.5 text-center">{i + 1}</td>
-                      <td className="border border-slate-800 p-1.5">{c.title}</td>
-                      <td className="border border-slate-800 p-1.5 text-center">{c.maxPoints}</td>
-                      <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.teacherScore}</td>
-                      <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.principalScore}</td>
-                    </tr>
-                  );
-                })}
+              {/* Criteria Table */}
+              <table className="w-full text-xs border-collapse border border-slate-800 mb-6 font-sans">
+                <thead>
+                  <tr className="bg-slate-100 font-bold uppercase text-center border-b border-slate-800">
+                    <th className="border border-slate-800 p-2 w-10">STT</th>
+                    <th className="border border-slate-800 p-2">Nội dung thi đua đánh giá</th>
+                    <th className="border border-slate-800 p-2 w-16">Tối đa</th>
+                    <th className="border border-slate-800 p-2 w-20">Cá nhân tự chấm</th>
+                    <th className="border border-slate-800 p-2 w-20">HT Duyệt</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr className="font-bold bg-slate-50">
+                    <td className="border border-slate-800 p-1.5 text-center">A</td>
+                    <td className="border border-slate-800 p-1.5" colSpan={2}>PHẦN A: NHIỆM VỤ CHUNG VÀ CHUYÊN MÔN (TỐI ĐA 30 ĐIỂM)</td>
+                    <td className="border border-slate-800 p-1.5 text-center">{Math.min(30, evaluation.totalPartA_Teacher)}đ</td>
+                    <td className="border border-slate-800 p-1.5 text-center">{Math.min(30, evaluation.totalPartA_Principal)}đ</td>
+                  </tr>
 
-                <tr className="font-bold bg-slate-50">
-                  <td className="border border-slate-800 p-1.5 text-center">B</td>
-                  <td className="border border-slate-800 p-1.5" colSpan={2}>PHẦN B: NHIỆM VỤ CỤ THỂ VÀ CÔNG TÁC KIÊM NHIỆM (TỐI ĐA 70 ĐIỂM)</td>
-                  <td className="border border-slate-800 p-1.5 text-center">{Math.min(70, evaluation.totalPartB_Teacher)}đ</td>
-                  <td className="border border-slate-800 p-1.5 text-center">{Math.min(70, evaluation.totalPartB_Principal)}đ</td>
-                </tr>
+                  {printCriteria.filter(c => c.section === 'A').map((c, i) => {
+                    const sc = evaluation.scores[c.id] || { teacherScore: c.maxPoints, principalScore: c.maxPoints };
+                    return (
+                      <tr key={c.id}>
+                        <td className="border border-slate-800 p-1.5 text-center">{i + 1}</td>
+                        <td className="border border-slate-800 p-1.5">{c.title}</td>
+                        <td className="border border-slate-800 p-1.5 text-center">{c.maxPoints}</td>
+                        <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.teacherScore}</td>
+                        <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.principalScore}</td>
+                      </tr>
+                    );
+                  })}
 
-                {FORM_03_CRITERIA.filter(c => c.section === 'B').map((c, i) => {
-                  const sc = evaluation.scores[c.id] || { teacherScore: c.maxPoints, principalScore: c.maxPoints };
-                  return (
-                    <tr key={c.id}>
-                      <td className="border border-slate-800 p-1.5 text-center">{i + 1}</td>
-                      <td className="border border-slate-800 p-1.5">{c.title}</td>
-                      <td className="border border-slate-800 p-1.5 text-center">{c.maxPoints}</td>
-                      <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.teacherScore}</td>
-                      <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.principalScore}</td>
-                    </tr>
-                  );
-                })}
+                  <tr className="font-bold bg-slate-50">
+                    <td className="border border-slate-800 p-1.5 text-center">B</td>
+                    <td className="border border-slate-800 p-1.5" colSpan={2}>PHẦN B: NHIỆM VỤ CỤ THỂ VÀ CÔNG TÁC KIÊM NHIỆM (TỐI ĐA 70 ĐIỂM)</td>
+                    <td className="border border-slate-800 p-1.5 text-center">{Math.min(70, evaluation.totalPartB_Teacher)}đ</td>
+                    <td className="border border-slate-800 p-1.5 text-center">{Math.min(70, evaluation.totalPartB_Principal)}đ</td>
+                  </tr>
+
+                  {printCriteria.filter(c => c.section === 'B').map((c, i) => {
+                    const sc = evaluation.scores[c.id] || { teacherScore: c.maxPoints, principalScore: c.maxPoints };
+                    return (
+                      <React.Fragment key={c.id}>
+                        <tr className="font-bold bg-slate-100">
+                          <td className="border border-slate-800 p-1.5 text-center">{i + 1}</td>
+                          <td className="border border-slate-800 p-1.5 font-bold uppercase">{c.title}</td>
+                          <td className="border border-slate-800 p-1.5 text-center">{c.maxPoints}</td>
+                          <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.teacherScore}đ</td>
+                          <td className="border border-slate-800 p-1.5 text-center font-bold">{sc.principalScore}đ</td>
+                        </tr>
+                        {c.tiers && c.tiers.map((tier) => {
+                          const isTeacher = sc.teacherScore === tier.points;
+                          const isPrincipal = sc.principalScore === tier.points;
+                          return (
+                            <tr key={tier.code} className="text-[11px]">
+                              <td className="border border-slate-800 p-1 text-center font-bold">{tier.code}</td>
+                              <td className="border border-slate-800 p-1 pl-2">{tier.label}</td>
+                              <td className="border border-slate-800 p-1 text-center">{tier.points}</td>
+                              <td className="border border-slate-800 p-1 text-center font-bold text-blue-900">{isTeacher ? '✓' : ''}</td>
+                              <td className="border border-slate-800 p-1 text-center font-bold text-indigo-900">{isPrincipal ? '✓' : ''}</td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
 
                 <tr>
                   <td className="border border-slate-800 p-1.5 text-center font-bold">C</td>
@@ -161,10 +205,14 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
 
                 <tr className="font-extrabold text-sm bg-slate-200">
                   <td className="border border-slate-800 p-2 text-center" colSpan={3}>
-                    TỔNG ĐIỂM VÀ XẾP LOẠI THI ĐUA (PHẦN A TỐI ĐA 30Đ + PHẦN B TỐI ĐA 70Đ = TỐI ĐA 100Đ)
+                    TỔNG ĐIỂM VÀ XẾP LOẠI THI ĐUA (TỔNG = PHẦN A + PHẦN B + ĐIỂM CỘNG - ĐIỂM TRỪ, TỐI ĐA 100Đ)
                   </td>
-                  <td className="border border-slate-800 p-2 text-center">{Math.min(100, Math.min(30, evaluation.totalPartA_Teacher) + Math.min(70, evaluation.totalPartB_Teacher))} điểm</td>
-                  <td className="border border-slate-800 p-2 text-center">{Math.min(100, Math.min(30, evaluation.totalPartA_Principal) + Math.min(70, evaluation.totalPartB_Principal))} điểm</td>
+                  <td className="border border-slate-800 p-2 text-center">
+                    {evaluation.grandTotal_Teacher ?? Math.max(0, Math.min(100, Math.round(((evaluation.totalPartA_Teacher || 0) + (evaluation.totalPartB_Teacher || 0) + (evaluation.totalBonus_Teacher || 0) - (evaluation.totalDeduction_Teacher || 0)) * 100) / 100))} điểm
+                  </td>
+                  <td className="border border-slate-800 p-2 text-center">
+                    {evaluation.grandTotal_Principal ?? Math.max(0, Math.min(100, Math.round(((evaluation.totalPartA_Principal || 0) + (evaluation.totalPartB_Principal || 0) + (evaluation.totalBonus_Principal || 0) - (evaluation.totalDeduction_Principal || 0)) * 100) / 100))} điểm
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -207,7 +255,8 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
               </div>
             </div>
           </div>
-        )}
+        );
+      })()}
 
         {/* PRINT SUMMARY TABLE FOR ALL 34 TEACHERS */}
         {type === 'summary' && (
@@ -217,7 +266,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                 BẢNG TỔNG HỢP XẾP LOẠI THI ĐUA GIÁO VIÊN THÁNG {selectedMonth} NĂM 2026
               </h1>
               <p className="text-xs italic font-sans text-slate-600 mt-1">
-                Trường PTDTBT THCS Nước Oa (Tổng số: 34 Giáo viên)
+                Trường PTDTNT THCS và THPT Nước Oa (Tổng số: {teachers.length} Giáo viên)
               </p>
             </div>
 
@@ -239,12 +288,13 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
               </thead>
               <tbody>
                 {teachers.map((t, idx) => {
-                  const ev = evaluations[t.id];
+                  const evKey = `${t.id}_y2026_m${selectedMonth}`;
+                  const ev = evaluations[evKey] || evaluations[t.id];
                   const partA = Math.min(30, ev ? ev.totalPartA_Principal : 30);
                   const partB = Math.min(70, ev ? ev.totalPartB_Principal : 60);
                   const bonus = ev ? ev.totalBonus_Principal : 0;
                   const ded = ev ? ev.totalDeduction_Principal : 0;
-                  const grandTotal = Math.min(100, partA + partB);
+                  const grandTotal = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
                   const clsLabel = getClassificationLabel(getClassification(grandTotal));
 
                   return (
