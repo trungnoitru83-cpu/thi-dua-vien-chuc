@@ -205,6 +205,13 @@ export default function App() {
     summaryEvaluationsMap[t.id] = evaluations[k] || evaluations[`${t.id}_m${selectedMonth}`] || createDefaultEvaluation(t.id, selectedMonth, selectedYear);
   });
 
+  // Map of Form 01 for summary table
+  const summaryForm01Map: Record<string, Form01Data> = {};
+  teachers.forEach(t => {
+    const k = `${t.id}_y${selectedYear}_m${selectedMonth}`;
+    summaryForm01Map[t.id] = form01Data[k] || form01Data[`${t.id}_m${selectedMonth}`] || createDefaultForm01(t.id, selectedMonth);
+  });
+
   return (
     <div className="min-h-screen bg-slate-100/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 flex flex-col font-sans selection:bg-blue-600 selection:text-white">
       
@@ -239,6 +246,7 @@ export default function App() {
             teachers={teachers}
             teacher={selectedTeacher}
             form01={currentForm01}
+            evaluation={currentEvaluation}
             selectedMonth={selectedMonth}
             currentRole={currentRole}
             onSelectTeacher={(t) => setSelectedTeacher(t)}
@@ -272,6 +280,7 @@ export default function App() {
           <SummaryTablePage
             teachers={teachers}
             evaluations={summaryEvaluationsMap}
+            form01DataMap={summaryForm01Map}
             selectedMonth={selectedMonth}
             onSelectTeacherForView={(t, tab) => {
               setSelectedTeacher(t);

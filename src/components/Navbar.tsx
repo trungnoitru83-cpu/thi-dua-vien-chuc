@@ -1,5 +1,5 @@
 import React from 'react';
-import { LogIn, UserCheck, FileSpreadsheet, BarChart3, Calendar, Award, LogOut, ChevronDown } from 'lucide-react';
+import { LogIn, UserCheck, FileSpreadsheet, BarChart3, Calendar, Award, LogOut, ChevronDown, CloudCheck } from 'lucide-react';
 import { Teacher, Role } from '../types';
 
 interface NavbarProps {
@@ -51,6 +51,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                 </span>
                 <span className="px-2 py-0.5 text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 rounded-full border border-blue-200 dark:border-blue-800">
                   NĂM {selectedYear}
+                </span>
+                <span className="hidden sm:inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 rounded-full border border-emerald-300 dark:border-emerald-800" title="Dữ liệu đồng bộ trực tuyến thời gian thực trên CSDL Đám mây (Firebase Cloud)">
+                  <CloudCheck className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
+                  <span>Đám Mây Firestore</span>
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">

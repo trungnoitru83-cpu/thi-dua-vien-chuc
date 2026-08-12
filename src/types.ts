@@ -11,6 +11,7 @@ export interface Teacher {
   fullName: string;
   email: string;
   dob: string; // DD/MM/YYYY
+  position?: string; // Chức vụ: Hiệu trưởng, Phó hiệu trưởng, TTCM, Giáo viên...
   subject: string; // Bộ môn giảng dạy
   department: string; // Tổ chuyên môn
   school: string; // Trường

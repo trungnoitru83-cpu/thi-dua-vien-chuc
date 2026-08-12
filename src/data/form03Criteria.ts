@@ -11,9 +11,15 @@ export function generate025Options(maxPoints: number): number[] {
 // Helper to determine if a teacher holds a leadership/management position (Hiệu trưởng, Phó HT, TTCM, Tổ trưởng...)
 export function isLeaderTeacher(teacher?: Teacher): boolean {
   if (!teacher) return false;
+  const pos = (teacher.position || '').toLowerCase();
   const subj = (teacher.subject || '').toLowerCase();
   const dept = (teacher.department || '').toLowerCase();
   return (
+    pos.includes('hiệu trưởng') ||
+    pos.includes('phó hiệu trưởng') ||
+    pos.includes('tổ trưởng') ||
+    pos.includes('quản lý') ||
+    pos.includes('lãnh đạo') ||
     subj.includes('hiệu trưởng') ||
     subj.includes('phó hiệu trưởng') ||
     subj.includes('ttcm') ||
