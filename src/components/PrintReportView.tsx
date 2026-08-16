@@ -278,11 +278,12 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                   <th className="border border-slate-800 p-1.5 w-16">Ngày sinh</th>
                   <th className="border border-slate-800 p-1.5">Bộ môn</th>
                   <th className="border border-slate-800 p-1.5">Tổ chuyên môn</th>
+                  <th className="border border-slate-800 p-1.5 w-12 font-bold bg-slate-200">Điểm tự chấm</th>
                   <th className="border border-slate-800 p-1.5 w-10">Điểm A</th>
                   <th className="border border-slate-800 p-1.5 w-10">Điểm B</th>
                   <th className="border border-slate-800 p-1.5 w-10">Cộng</th>
                   <th className="border border-slate-800 p-1.5 w-10">Trừ</th>
-                  <th className="border border-slate-800 p-1.5 w-12 font-extrabold">Tổng</th>
+                  <th className="border border-slate-800 p-1.5 w-12 font-extrabold">Tổng HT</th>
                   <th className="border border-slate-800 p-1.5 min-w-[110px]">Xếp loại thi đua</th>
                 </tr>
               </thead>
@@ -290,6 +291,12 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                 {teachers.map((t, idx) => {
                   const evKey = `${t.id}_y2026_m${selectedMonth}`;
                   const ev = evaluations[evKey] || evaluations[t.id];
+                  const tPartA = Math.min(30, ev?.totalPartA_Teacher ?? 30);
+                  const tPartB = Math.min(70, ev?.totalPartB_Teacher ?? 60);
+                  const tBonus = ev?.totalBonus_Teacher || 0;
+                  const tDed = ev?.totalDeduction_Teacher || 0;
+                  const teacherTotal = ev?.grandTotal_Teacher ?? Math.min(100, Math.max(0, tPartA + tPartB + tBonus - tDed));
+
                   const partA = Math.min(30, ev ? ev.totalPartA_Principal : 30);
                   const partB = Math.min(70, ev ? ev.totalPartB_Principal : 60);
                   const bonus = ev ? ev.totalBonus_Principal : 0;
@@ -304,6 +311,7 @@ export const PrintReportView: React.FC<PrintReportViewProps> = ({
                       <td className="border border-slate-800 p-1 text-center">{t.dob}</td>
                       <td className="border border-slate-800 p-1">{t.subject}</td>
                       <td className="border border-slate-800 p-1">{t.department}</td>
+                      <td className="border border-slate-800 p-1 text-center font-bold bg-slate-50">{teacherTotal}</td>
                       <td className="border border-slate-800 p-1 text-center">{partA}</td>
                       <td className="border border-slate-800 p-1 text-center">{partB}</td>
                       <td className="border border-slate-800 p-1 text-center">+{bonus}</td>

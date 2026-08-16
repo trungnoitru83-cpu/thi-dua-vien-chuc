@@ -1,4 +1,4 @@
-import { CriteriaItem, Teacher } from '../types';
+import { CriteriaItem, Teacher, Role } from '../types';
 
 export function generate025Options(maxPoints: number): number[] {
   const options: number[] = [];
@@ -8,27 +8,69 @@ export function generate025Options(maxPoints: number): number[] {
   return options;
 }
 
-// Helper to determine if a teacher holds a leadership/management position (Hiệu trưởng, Phó HT, TTCM, Tổ trưởng...)
+// Helper to determine if a teacher holds a leadership/management position (Hiệu trưởng HT, Phó HT/Hiệu phó HP, Tổ trưởng TTCM, Tổ phó TPCM)
 export function isLeaderTeacher(teacher?: Teacher): boolean {
   if (!teacher) return false;
-  const pos = (teacher.position || '').toLowerCase();
-  const subj = (teacher.subject || '').toLowerCase();
-  const dept = (teacher.department || '').toLowerCase();
+  const pos = (teacher.position || '').toLowerCase().trim();
+  const subj = (teacher.subject || '').toLowerCase().trim();
+  const dept = (teacher.department || '').toLowerCase().trim();
+  
   return (
     pos.includes('hiệu trưởng') ||
     pos.includes('phó hiệu trưởng') ||
+    pos.includes('hiệu phó') ||
     pos.includes('tổ trưởng') ||
-    pos.includes('quản lý') ||
+    pos.includes('tổ phó') ||
+    pos.includes('ttcm') ||
+    pos.includes('tpcm') ||
     pos.includes('lãnh đạo') ||
+    pos.includes('quản lý') ||
+    pos === 'ht' ||
+    pos === 'hp' ||
+    pos.startsWith('ht ') ||
+    pos.startsWith('hp ') ||
     subj.includes('hiệu trưởng') ||
     subj.includes('phó hiệu trưởng') ||
+    subj.includes('hiệu phó') ||
     subj.includes('ttcm') ||
+    subj.includes('tpcm') ||
     subj.includes('tổ trưởng') ||
-    subj.includes('quản lý') ||
-    subj.includes('lãnh đạo') ||
+    subj.includes('tổ phó') ||
     dept.includes('bgh') ||
-    dept.includes('ban giám hiệu')
+    dept.includes('ban giám hiệu') ||
+    dept.includes('lãnh đạo')
   );
+}
+
+// Phân định rõ ràng Form mặc định:
+// - Mẫu 02: Tổ trưởng chuyên môn (TTCM), Tổ phó chuyên môn (TPCM), Hiệu trưởng (HT), Hiệu phó (HP)
+// - Mẫu 03: Giáo viên (GV), Nhân viên (NV)
+export type FormType = 'mau02' | 'mau03';
+
+export function getFormTypeForTeacher(teacher?: Teacher): FormType {
+  return isLeaderTeacher(teacher) ? 'mau02' : 'mau03';
+}
+
+export function getFormLabel(formType: FormType): string {
+  return formType === 'mau02'
+    ? 'Mẫu 02 (Lãnh đạo, TTCM, TPCM, HT, HP)'
+    : 'Mẫu 03 (Giáo viên, Nhân viên)';
+}
+
+export function getDefaultRoleForTeacher(teacher: Teacher): Role {
+  const pos = (teacher.position || '').toLowerCase();
+  const dept = (teacher.department || '').toLowerCase();
+
+  if (pos.includes('hiệu trưởng') || pos.includes('phó hiệu trưởng') || pos.includes('hiệu phó') || dept.includes('ban giám hiệu') || dept.includes('bgh')) {
+    return 'principal';
+  }
+  if (pos.includes('tổ trưởng') || pos.includes('tổ phó') || pos.includes('ttcm') || pos.includes('tpcm')) {
+    return 'department_head';
+  }
+  if (pos.includes('nhân viên') || dept.includes('văn phòng') || dept.includes('qlnt') || pos.includes('y tế') || pos.includes('kế toán') || pos.includes('văn thư') || pos.includes('bảo vệ')) {
+    return 'staff';
+  }
+  return 'teacher';
 }
 
 // =========================================================================

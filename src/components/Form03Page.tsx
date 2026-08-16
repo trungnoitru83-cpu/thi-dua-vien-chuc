@@ -66,9 +66,16 @@ export const Form03Page: React.FC<Form03PageProps> = ({
     });
   };
 
-  // Determine criteria set (Mẫu 02 for Leaders/Principals/Department Heads, Mẫu 03 for Teachers)
-  const isLeader = isLeaderTeacher(currentTeacher);
-  const activeCriteria = getCriteriaForTeacher(currentTeacher);
+  // Determine criteria set (Mẫu 02 for Leaders/TTCM/TPCM/HT/HP, Mẫu 03 for GV/NV)
+  const defaultFormType = isLeaderTeacher(currentTeacher) ? 'mau02' : 'mau03';
+  const [selectedFormType, setSelectedFormType] = useState<'mau02' | 'mau03'>(defaultFormType);
+
+  React.useEffect(() => {
+    setSelectedFormType(isLeaderTeacher(currentTeacher) ? 'mau02' : 'mau03');
+  }, [currentTeacher.id]);
+
+  const isLeader = selectedFormType === 'mau02';
+  const activeCriteria = getCriteriaForTeacher(currentTeacher, selectedFormType);
 
   // Calculate live totals
   let rawPartA_Teacher = 0;
@@ -164,19 +171,40 @@ export const Form03Page: React.FC<Form03PageProps> = ({
         
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-6 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className={`px-3 py-1 text-xs font-bold rounded-full ${isLeader ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300' : 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300'}`}>
-                {isLeader ? 'TRANG 3: BẢNG CHẤM ĐIỂM MẪU 02 (CÁN BỘ QUẢN LÝ / TỔ TRƯỞNG)' : 'TRANG 3: BẢNG CHẤM ĐIỂM MẪU 03 (GIÁO VIÊN / NHÂN VIÊN)'}
-              </span>
-              <span className="text-xs text-slate-500 font-semibold">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <div className="inline-flex rounded-xl p-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                <button
+                  type="button"
+                  onClick={() => setSelectedFormType('mau03')}
+                  className={`px-3 py-1 text-xs font-extrabold rounded-lg transition ${
+                    selectedFormType === 'mau03'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                  }`}
+                >
+                  MẪU 03 (GV &amp; NV)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedFormType('mau02')}
+                  className={`px-3 py-1 text-xs font-extrabold rounded-lg transition ${
+                    selectedFormType === 'mau02'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                  }`}
+                >
+                  MẪU 02 (LÃNH ĐẠO, TTCM, TPCM, HT, HP)
+                </button>
+              </div>
+              <span className="text-xs text-slate-500 font-semibold px-2 py-0.5 bg-slate-100 dark:bg-slate-800 rounded-lg">
                 Tháng {selectedMonth}/2026
               </span>
             </div>
             <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
-              Phiếu Chấm Điểm Thi Đua - {currentTeacher.fullName}
+              {isLeader ? 'Bảng Đánh Giá Mẫu 02 (Lãnh Đạo / TTCM / TPCM)' : 'Phiếu Chấm Điểm Mẫu 03 (Giáo Viên / Nhân Viên)'} - {currentTeacher.fullName}
             </h1>
-            <p className="text-xs text-slate-500">
-              Trường: {currentTeacher.school} | Môn: <strong>{currentTeacher.subject}</strong> | Tổ: {currentTeacher.department}
+            <p className="text-xs text-slate-500 mt-0.5">
+              Chức vụ: <strong>{currentTeacher.position || 'Giáo viên'}</strong> | Môn: <strong>{currentTeacher.subject}</strong> | Tổ: <strong>{currentTeacher.department}</strong> | Trường: {currentTeacher.school}
             </p>
           </div>
 

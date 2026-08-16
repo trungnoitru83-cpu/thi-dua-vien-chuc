@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Award, Search, Filter, Printer, Download, UserPlus, Eye, FileSpreadsheet, CheckCircle, AlertTriangle, ShieldCheck, HelpCircle, Copy, FileText, ExternalLink } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Award, Search, Filter, Printer, Download, UserPlus, Eye, FileSpreadsheet, CheckCircle, AlertTriangle, ShieldCheck, HelpCircle, FileText, Check, RefreshCw, CloudCheck } from 'lucide-react';
 import { Teacher, Form03Evaluation, Form01Data, ClassificationType } from '../types';
-import { CLASSIFICATION_RULES, getClassificationLabel, getClassification } from '../data/form03Criteria';
+import { CLASSIFICATION_RULES, getClassificationLabel, getClassification, isLeaderTeacher } from '../data/form03Criteria';
 import { exportToWord } from '../lib/wordExport';
+import { syncAllTeachersToGoogleSheet } from '../lib/googleSheetService';
 
 interface SummaryTablePageProps {
   teachers: Teacher[];
@@ -26,7 +27,8 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [departmentFilter, setDepartmentFilter] = useState<string>('ALL');
   const [classificationFilter, setClassificationFilter] = useState<string>('ALL');
-  const [copiedToast, setCopiedToast] = useState(false);
+  const [isSyncingGoogleSheet, setIsSyncingGoogleSheet] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   // Helper to fetch monthly evaluation for a teacher
   const getEval = (teacherId: string): Form03Evaluation | undefined => {
@@ -36,6 +38,44 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
   // Helper to fetch monthly Form 01 for a teacher
   const getForm01 = (teacherId: string): Form01Data | undefined => {
     return form01DataMap ? form01DataMap[teacherId] : undefined;
+  };
+
+  // Tự động đồng bộ lên Google Sheet mỗi khi dữ liệu hoặc tháng thay đổi
+  useEffect(() => {
+    let isMounted = true;
+    const autoSync = async () => {
+      try {
+        const res = await syncAllTeachersToGoogleSheet(teachers, evaluations, selectedMonth, 2026);
+        if (isMounted && res.success) {
+          setSyncMessage(`File Tháng ${selectedMonth}/2026 đã tự động lưu trên Google Sheet (${res.successCount}/${teachers.length} cán bộ)`);
+        }
+      } catch (err) {
+        console.warn('Lưu ngầm Google Sheet:', err);
+      }
+    };
+    
+    // Tự động lưu ngầm
+    const timer = setTimeout(() => {
+      autoSync();
+    }, 1200);
+
+    return () => {
+      isMounted = false;
+      clearTimeout(timer);
+    };
+  }, [selectedMonth, teachers.length, evaluations]);
+
+  const handleManualSyncGoogleSheet = async () => {
+    setIsSyncingGoogleSheet(true);
+    try {
+      const res = await syncAllTeachersToGoogleSheet(teachers, evaluations, selectedMonth, 2026);
+      setSyncMessage(res.message);
+      setTimeout(() => setSyncMessage(null), 5000);
+    } catch (err) {
+      setSyncMessage('Có lỗi khi kết nối Google Sheet. Dữ liệu vẫn được lưu an toàn trong hệ thống.');
+    } finally {
+      setIsSyncingGoogleSheet(false);
+    }
   };
 
   // Filter teachers list
@@ -57,7 +97,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
     return matchesSearch && matchesDept && matchesClass;
   });
 
-  // Calculate statistics across all 36 teachers
+  // Calculate statistics across all teachers
   let totalExcellent = 0; // >= 90
   let totalGood = 0;      // 80 - <90
   let totalPass = 0;      // 50 - <80
@@ -79,16 +119,22 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
 
   const avgSchoolScore = teachers.length > 0 ? (totalPointsSum / teachers.length).toFixed(1) : '0';
 
-  // Export to CSV / Excel helper
+  // Export to CSV / Excel helper with GV/NV self-assessment score
   const handleExportCSV = () => {
     let csvContent = '\uFEFF'; // UTF-8 BOM
     csvContent += `BẢNG TỔNG HỢP XẾP LOẠI THI ĐUA CÁN BỘ GIÁO VIÊN THÁNG ${selectedMonth}/2026\n`;
     csvContent += `Trường PTDTNT THCS và THPT Nước Oa\n\n`;
-    csvContent += `STT,Họ và tên cán bộ giáo viên,Chức vụ,Ngày sinh,Bộ môn,Tổ chuyên môn,Trường,Điểm A (Max 30),Điểm B (Max 70),Điểm Cộng,Điểm Trừ,Tổng điểm Hiệu trưởng đánh giá,Xếp loại thi đua,Trạng thái\n`;
+    csvContent += `STT,Họ và tên cán bộ giáo viên,Chức vụ,Ngày sinh,Bộ môn,Tổ chuyên môn,Trường,Điểm GV/NV tự chấm,Điểm A (HT duyệt),Điểm B (HT duyệt),Điểm Cộng (+C),Điểm Trừ (-D),Tổng điểm Hiệu trưởng đánh giá,Xếp loại thi đua,Trạng thái\n`;
 
     teachers.forEach((t, idx) => {
       const ev = getEval(t.id);
       const pos = t.position || t.subject;
+      const tPartA = ev ? Math.min(30, ev.totalPartA_Teacher ?? 30) : 30;
+      const tPartB = ev ? Math.min(70, ev.totalPartB_Teacher ?? 60) : 60;
+      const tBonus = ev ? (ev.totalBonus_Teacher || 0) : 0;
+      const tDed = ev ? (ev.totalDeduction_Teacher || 0) : 0;
+      const teacherTotal = ev ? (ev.grandTotal_Teacher ?? Math.min(100, Math.max(0, tPartA + tPartB + tBonus - tDed))) : Math.min(100, tPartA + tPartB);
+
       const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
       const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
       const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
@@ -97,7 +143,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
       const clsLabel = getClassificationLabel(getClassification(grandTotal));
       const statusLabel = ev?.status === 'approved' ? 'Đã duyệt' : 'Chờ duyệt';
 
-      csvContent += `${idx + 1},"${t.fullName}","${pos}","${t.dob}","${t.subject}","${t.department}","${t.school}",${partA},${partB},${bonusPrincipal},${dedPrincipal},${grandTotal},"${clsLabel}","${statusLabel}"\n`;
+      csvContent += `${idx + 1},"${t.fullName}","${pos}","${t.dob}","${t.subject}","${t.department}","${t.school}",${teacherTotal},${partA},${partB},${bonusPrincipal},${dedPrincipal},${grandTotal},"${clsLabel}","${statusLabel}"\n`;
     });
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
@@ -110,39 +156,23 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
     document.body.removeChild(link);
   };
 
-  // Copy Tab-Separated Values for direct pasting into Google Sheets
-  const handleCopyForGoogleSheets = () => {
-    let tsv = `STT\tHọ và tên cán bộ giáo viên\tChức vụ\tNgày sinh\tBộ môn\tTổ chuyên môn\tTrường\tĐiểm A (Max 30)\tĐiểm B (Max 70)\tĐiểm Cộng (+C)\tĐiểm Trừ (-D)\tTổng điểm HT đánh giá\tXếp loại thi đua\n`;
-    teachers.forEach((t, idx) => {
-      const ev = getEval(t.id);
-      const pos = t.position || t.subject;
-      const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
-      const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
-      const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
-      const dedPrincipal = ev ? (ev.totalDeduction_Principal || 0) : 0;
-      const grandTotal = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
-      const clsLabel = getClassificationLabel(getClassification(grandTotal));
-
-      tsv += `${idx + 1}\t${t.fullName}\t${pos}\t${t.dob}\t${t.subject}\t${t.department}\t${t.school}\t${partA}\t${partB}\t${bonusPrincipal}\t${dedPrincipal}\t${grandTotal}\t${clsLabel}\n`;
-    });
-
-    navigator.clipboard.writeText(tsv).then(() => {
-      setCopiedToast(true);
-      setTimeout(() => setCopiedToast(false), 4500);
-    });
-  };
-
-  // Export summary table to Word .doc format
+  // Export summary table to Word .doc format with GV/NV self-assessment score
   const handleExportWord = () => {
     let html = `<div class="title">BẢNG TỔNG HỢP XẾP LOẠI THI ĐUA ${teachers.length} CÁN BỘ GIÁO VIÊN THÁNG ${selectedMonth}/2026</div>`;
     html += `<div class="subtitle">Trường PTDTNT THCS và THPT Nước Oa</div>`;
     html += `<table><thead><tr>
-      <th>STT</th><th>Họ và tên</th><th>Chức vụ</th><th>Bộ môn</th><th>Tổ chuyên môn</th><th>Điểm A</th><th>Điểm B</th><th>Điểm Cộng</th><th>Điểm Trừ</th><th>Tổng điểm</th><th>Xếp loại</th>
+      <th>STT</th><th>Họ và tên</th><th>Chức vụ</th><th>Bộ môn</th><th>Tổ chuyên môn</th><th>Điểm GV tự chấm</th><th>Điểm A</th><th>Điểm B</th><th>Điểm Cộng</th><th>Điểm Trừ</th><th>Tổng điểm HT</th><th>Xếp loại</th>
     </tr></thead><tbody>`;
 
     teachers.forEach((t, idx) => {
       const ev = getEval(t.id);
       const pos = t.position || t.subject;
+      const tPartA = ev ? Math.min(30, ev.totalPartA_Teacher ?? 30) : 30;
+      const tPartB = ev ? Math.min(70, ev.totalPartB_Teacher ?? 60) : 60;
+      const tBonus = ev ? (ev.totalBonus_Teacher || 0) : 0;
+      const tDed = ev ? (ev.totalDeduction_Teacher || 0) : 0;
+      const teacherTotal = ev ? (ev.grandTotal_Teacher ?? Math.min(100, Math.max(0, tPartA + tPartB + tBonus - tDed))) : Math.min(100, tPartA + tPartB);
+
       const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
       const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
       const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
@@ -156,6 +186,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
         <td>${pos}</td>
         <td>${t.subject}</td>
         <td>${t.department}</td>
+        <td style="text-align:center;font-weight:bold;color:#1e40af">${teacherTotal}</td>
         <td style="text-align:center">${partA}</td>
         <td style="text-align:center">${partB}</td>
         <td style="text-align:center">+${bonusPrincipal}</td>
@@ -187,23 +218,17 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
             Bảng Tổng Hợp Xếp Loại Thi Đua {teachers.length} Cán Bộ Giáo Viên
           </h1>
           <p className="text-xs text-slate-500">
-            Trường PTDTNT THCS và THPT Nước Oa. Tự động đồng bộ điểm A+B, Điểm Cộng, Điểm Trừ vào file tổng hợp.
+            Trường PTDTNT THCS và THPT Nước Oa. Tự động lưu file Tháng {selectedMonth} trên Google Sheet và cập nhật điểm đánh giá theo thời gian thực.
           </p>
         </div>
 
         {/* Top Actions */}
         <div className="flex flex-wrap items-center gap-2">
-          <a
-            href="https://docs.google.com/spreadsheets/d/1sLOpOWvtufbaFHkcuJAa0BpC2zA4ePFZMSjY-hc-DM8/edit?gid=0#gid=0"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-extrabold text-xs rounded-2xl shadow-md transition"
-            title={`Mở Google Sheet Bảng Mẫu 01 Tháng ${selectedMonth} năm 2026`}
-          >
-            <FileSpreadsheet className="w-4 h-4" />
-            <span>Mở Google Sheet Tháng {selectedMonth} năm 2026</span>
-            <ExternalLink className="w-3 h-3 opacity-80" />
-          </a>
+          {/* Cloud Auto-Save Indicator */}
+          <div className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-700 text-emerald-800 dark:text-emerald-200 text-xs font-bold rounded-2xl shadow-xs">
+            <CloudCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+            <span>Mặc định lưu file: Tháng {selectedMonth}/2026 (Google Sheet)</span>
+          </div>
 
           <button
             onClick={onOpenManageTeachersModal}
@@ -214,12 +239,13 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
           </button>
 
           <button
-            onClick={handleCopyForGoogleSheets}
-            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-600 text-white hover:bg-emerald-700 font-bold text-xs rounded-2xl shadow-md transition"
-            title="Sao chép toàn bộ bảng điểm để dán trực tiếp vào Google Sheets"
+            onClick={handleManualSyncGoogleSheet}
+            disabled={isSyncingGoogleSheet}
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs rounded-2xl shadow-md transition disabled:opacity-60"
+            title="Nhấn để kiểm tra và đồng bộ lại toàn bộ dữ liệu tháng sang Google Sheet"
           >
-            <Copy className="w-4 h-4" />
-            <span>Dán vào Google Sheets</span>
+            <RefreshCw className={`w-4 h-4 ${isSyncingGoogleSheet ? 'animate-spin' : ''}`} />
+            <span>{isSyncingGoogleSheet ? 'Đang lưu Google Sheet...' : 'Lưu lại Google Sheet'}</span>
           </button>
 
           <button
@@ -248,11 +274,11 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
         </div>
       </div>
 
-      {copiedToast && (
-        <div className="mb-6 p-4 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100 rounded-2xl border-2 border-emerald-500 flex items-center justify-between gap-3 font-bold text-sm shadow-lg animate-bounce">
+      {syncMessage && (
+        <div className="mb-6 p-4 bg-emerald-50 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-100 rounded-2xl border border-emerald-400 flex items-center justify-between gap-3 font-bold text-xs shadow-xs">
           <div className="flex items-center gap-2">
-            <CheckCircle className="w-5 h-5 text-emerald-600" />
-            <span>✅ ĐÃ SAO CHÉP DỮ LIỆU THI ĐUA! Mở Google Sheets và nhấn Ctrl+V để dán dữ liệu.</span>
+            <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>{syncMessage}</span>
           </div>
         </div>
       )}
@@ -388,11 +414,11 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
         <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
         <div className="text-xs text-emerald-950 dark:text-emerald-200">
           <p className="font-extrabold text-emerald-900 dark:text-emerald-100 flex items-center gap-2">
-            <span>Tự Động Ngầm Truyền & Lưu Trữ Lâu Dài Vào Hệ Thống (Tháng {selectedMonth}/2026):</span>
+            <span>Mặc Định Lưu File Tháng {selectedMonth} Trên Google Sheet & Cơ Sở Dữ Liệu:</span>
             <span className="px-2 py-0.5 bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 font-mono text-[10px] rounded-full">Tên file: Tháng {selectedMonth} năm 2026</span>
           </p>
           <p className="mt-1 text-emerald-800 dark:text-emerald-300 leading-relaxed">
-            Bảng Tổng Hợp Hệ Thống không chèn đường liên kết trực tiếp rườm rà vào từng ô mà tự động ngầm nhận dữ liệu từ Mẫu 01 & Mẫu 03 (gồm: <strong>Họ tên</strong>, <strong>Chức vụ</strong>, <strong>Tổ chuyên môn</strong>, <strong>Điểm Tiêu chí chung A</strong>, <strong>Điểm Chuyên môn B</strong>, <strong>Điểm Cộng +C</strong>, <strong>Điểm Trừ -D</strong>, <strong>Tổng điểm Hiệu trưởng đánh giá</strong> &amp; <strong>Mức Xếp loại thi đua</strong>) về lưu trữ vĩnh viễn trong hệ thống theo từng tháng.
+            Hệ thống tự động đồng bộ đầy đủ các trường: <strong>Họ tên</strong>, <strong>Chức vụ</strong>, <strong>Bộ môn</strong>, <strong>Tổ chuyên môn</strong>, <strong>Điểm GV/NV tự chấm</strong>, <strong>Điểm Tiêu chí chung A</strong>, <strong>Điểm Chuyên môn B</strong>, <strong>Điểm Cộng (+C)</strong>, <strong>Điểm Trừ (-D)</strong>, <strong>Tổng điểm Hiệu trưởng đánh giá</strong> &amp; <strong>Mức Xếp loại thi đua</strong> trực tiếp vào file tháng trên Google Sheet.
           </p>
         </div>
       </div>
@@ -409,11 +435,14 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                 <th className="p-3.5 min-w-[90px]">Ngày sinh</th>
                 <th className="p-3.5 min-w-[110px]">Bộ môn</th>
                 <th className="p-3.5 min-w-[120px]">Tổ chuyên môn</th>
+                <th className="p-3.5 text-center bg-cyan-50/90 dark:bg-cyan-950/80 text-cyan-900 dark:text-cyan-200 border-x border-cyan-200 dark:border-cyan-800">
+                  Điểm GV, NV tự chấm
+                </th>
                 <th className="p-3.5 text-center bg-blue-50/80 dark:bg-blue-950/80 text-blue-900 dark:text-blue-200">
-                  Điểm A (Max 30)
+                  Điểm A (HT)
                 </th>
                 <th className="p-3.5 text-center bg-indigo-50/80 dark:bg-indigo-950/80 text-indigo-900 dark:text-indigo-200">
-                  Điểm B (Max 70)
+                  Điểm B (HT)
                 </th>
                 <th className="p-3.5 text-center bg-emerald-50/80 dark:bg-emerald-950/80 text-emerald-900 dark:text-emerald-200">
                   Điểm Cộng (+C)
@@ -424,7 +453,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                 <th className="p-3.5 text-center bg-slate-900 text-white font-black text-sm">
                   Tổng điểm HT
                 </th>
-                <th className="p-3.5 min-w-[170px]">Xếp loại thi đua</th>
+                <th className="p-3.5 min-w-[160px]">Xếp loại thi đua</th>
                 <th className="p-3.5 text-center">Hành động</th>
               </tr>
             </thead>
@@ -432,18 +461,22 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
             <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
               {filteredTeachers.length === 0 ? (
                 <tr>
-                  <td colSpan={13} className="p-8 text-center text-slate-400 font-semibold">
+                  <td colSpan={14} className="p-8 text-center text-slate-400 font-semibold">
                     Không tìm thấy cán bộ giáo viên thỏa mãn điều kiện lọc.
                   </td>
                 </tr>
               ) : (
                 filteredTeachers.map((t, idx) => {
                   const ev = getEval(t.id);
+                  const tPartA = ev ? Math.min(30, ev.totalPartA_Teacher ?? 30) : 30;
+                  const tPartB = ev ? Math.min(70, ev.totalPartB_Teacher ?? 60) : 60;
+                  const bonusTeacher = ev ? (ev.totalBonus_Teacher || 0) : 0;
+                  const dedTeacher = ev ? (ev.totalDeduction_Teacher || 0) : 0;
+                  const teacherGrandTotal = ev ? (ev.grandTotal_Teacher ?? Math.min(100, Math.max(0, tPartA + tPartB + bonusTeacher - dedTeacher))) : Math.min(100, tPartA + tPartB);
+
                   const partA = ev ? Math.min(30, ev.totalPartA_Principal) : 30;
                   const partB = ev ? Math.min(70, ev.totalPartB_Principal) : 60;
-                  const bonusTeacher = ev ? (ev.totalBonus_Teacher || 0) : 0;
                   const bonusPrincipal = ev ? (ev.totalBonus_Principal || 0) : 0;
-                  const dedTeacher = ev ? (ev.totalDeduction_Teacher || 0) : 0;
                   const dedPrincipal = ev ? (ev.totalDeduction_Principal || 0) : 0;
                   const grandTotal = ev ? (ev.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
                   const clsType = getClassification(grandTotal);
@@ -466,9 +499,18 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                       </td>
 
                       <td className="p-3">
-                        <span className="font-bold text-indigo-900 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 px-2.5 py-1 rounded-lg text-[11px] border border-indigo-200 dark:border-indigo-800">
-                          {t.position || t.subject}
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="font-bold text-indigo-900 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/80 px-2.5 py-0.5 rounded-lg text-[11px] border border-indigo-200 dark:border-indigo-800">
+                            {t.position || t.subject}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-md text-[10px] font-extrabold border ${
+                            isLeaderTeacher(t)
+                              ? 'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-300 border-amber-300 dark:border-amber-800'
+                              : 'bg-blue-50 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-200 dark:border-blue-800'
+                          }`}>
+                            {isLeaderTeacher(t) ? 'Mẫu 02' : 'Mẫu 03'}
+                          </span>
+                        </div>
                       </td>
 
                       <td className="p-3 font-semibold text-slate-600 dark:text-slate-400">
@@ -485,6 +527,16 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                         {t.department}
                       </td>
 
+                      {/* Điểm Giáo viên, Nhân viên tự chấm */}
+                      <td className="p-3 text-center bg-cyan-50/40 dark:bg-cyan-950/40 border-x border-cyan-200/60 dark:border-cyan-800/60">
+                        <div className="font-black text-cyan-950 dark:text-cyan-200 text-sm">
+                          {teacherGrandTotal} đ
+                        </div>
+                        <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
+                          A: {tPartA} | B: {tPartB}
+                        </div>
+                      </td>
+
                       <td className="p-3 text-center font-bold text-blue-800 dark:text-blue-300 bg-blue-50/20 dark:bg-blue-950/20">
                         {partA}
                       </td>
@@ -498,7 +550,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                           +{bonusPrincipal}đ
                         </div>
                         <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                          GV tự chấm: +{bonusTeacher}đ
+                          Tự chấm: +{bonusTeacher}đ
                         </div>
                       </td>
 
@@ -507,7 +559,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                           -{dedPrincipal}đ
                         </div>
                         <div className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">
-                          GV tự chấm: -{dedTeacher}đ
+                          Tự chấm: -{dedTeacher}đ
                         </div>
                       </td>
 
@@ -532,8 +584,12 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
                           </button>
                           <button
                             onClick={() => onSelectTeacherForView(t, 'evaluation')}
-                            title="Chấm Mẫu 03"
-                            className="p-1.5 text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-950 rounded-lg transition"
+                            title={isLeaderTeacher(t) ? "Chấm điểm Mẫu 02 (TTCM / Lãnh đạo)" : "Chấm điểm Mẫu 03 (GV / NV)"}
+                            className={`p-1.5 rounded-lg transition ${
+                              isLeaderTeacher(t)
+                                ? 'text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-950'
+                                : 'text-indigo-600 hover:bg-indigo-100 dark:hover:bg-indigo-950'
+                            }`}
                           >
                             <FileSpreadsheet className="w-4 h-4" />
                           </button>
@@ -549,7 +605,7 @@ export const SummaryTablePage: React.FC<SummaryTablePageProps> = ({
 
         <div className="p-4 bg-slate-50 dark:bg-slate-800/60 border-t border-slate-200 dark:border-slate-800 text-xs text-slate-500 flex items-center justify-between">
           <span>Hiển thị {filteredTeachers.length} trên tổng số {teachers.length} giáo viên</span>
-          <span>Cập nhật mới nhất: Tháng {selectedMonth}/2026</span>
+          <span>Cập nhật mới nhất: Tháng {selectedMonth}/2026 (Tự động lưu file Tháng {selectedMonth} trên Google Sheet)</span>
         </div>
       </div>
 

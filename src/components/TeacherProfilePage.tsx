@@ -158,9 +158,11 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
 
         <button
           onClick={onNavigateToForm03}
-          className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-2xl shadow-md transition shrink-0"
+          className={`flex items-center gap-2 px-5 py-2.5 text-white font-bold text-xs rounded-2xl shadow-md transition shrink-0 ${
+            isLeader ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
         >
-          <span>{isLeader ? 'Chuyển sang tính điểm Mẫu 02 (CBQL)' : 'Chuyển sang tính điểm Mẫu 03 (GV, NV)'}</span>
+          <span>{isLeader ? 'Chuyển sang Bảng chấm Mẫu 02 (TTCM, TPCM, HT, HP)' : 'Chuyển sang Bảng chấm Mẫu 03 (GV, NV)'}</span>
           <ArrowRight className="w-4 h-4" />
         </button>
       </div>

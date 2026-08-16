@@ -17,7 +17,9 @@ import {
   saveForm01ToFirestore,
   saveEvaluationToFirestore
 } from './lib/firebaseService';
-
+import {
+  saveEvaluationToGoogleSheet
+} from './lib/googleSheetService';
 export default function App() {
   // Application State
   const [activeTab, setActiveTab] = useState<'login' | 'profile' | 'evaluation' | 'summary'>('login');
@@ -162,13 +164,54 @@ export default function App() {
   };
 
   // Form03 Evaluation Updates
-  const handleSaveEvaluation = (evalData: Form03Evaluation) => {
-    const key = `${evalData.teacherId}_y${selectedYear}_m${evalData.month}`;
+  const handleSaveEvaluation = async (
+    evalData: Form03Evaluation
+  ) => {
+
+    const key =
+      `${evalData.teacherId}_y${selectedYear}_m${evalData.month}`;
+
+    // 1. Lưu vào Firebase như hiện tại
     setEvaluations(prev => ({
       ...prev,
       [key]: evalData
     }));
-    saveEvaluationToFirestore(key, evalData);
+
+    await saveEvaluationToFirestore(
+      key,
+      evalData
+    );
+
+    // 2. Đồng thời lưu vào Google Sheet
+    const teacher =
+      teachers.find(
+        t => t.id === evalData.teacherId
+      );
+
+    if (teacher) {
+
+      const result =
+        await saveEvaluationToGoogleSheet(
+          teacher,
+          evalData,
+          selectedMonth,
+          selectedYear
+        );
+
+      if (!result.success) {
+
+        console.error(
+          'Không lưu được Google Sheet:',
+          result.message
+        );
+
+      } else {
+
+        console.log(
+          'Đã lưu Google Sheet thành công'
+        );
+      }
+    }
   };
 
   // Manage Teachers Handlers

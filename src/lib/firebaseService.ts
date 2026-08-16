@@ -35,7 +35,7 @@ export async function syncInitialDataToFirestore(
     if (form01Snap.empty) {
       console.log('Seeding initial Form 01 data to Firestore...');
       for (const [key, data] of Object.entries(initialForm01)) {
-        await setDoc(doc(db, FORM01_COL, key), { ...data, docKey: key });
+        await setDoc(doc(db, FORM01_COL, key), sanitizeForFirestore({ ...data, docKey: key }));
       }
     }
 
@@ -43,7 +43,7 @@ export async function syncInitialDataToFirestore(
     if (evalSnap.empty) {
       console.log('Seeding initial Evaluations data to Firestore...');
       for (const [key, data] of Object.entries(initialEvaluations)) {
-        await setDoc(doc(db, EVALUATIONS_COL, key), { ...data, docKey: key });
+        await setDoc(doc(db, EVALUATIONS_COL, key), sanitizeForFirestore({ ...data, docKey: key }));
       }
     }
   } catch (error) {
@@ -120,14 +120,24 @@ export function listenToEvaluations(onData: (evalMap: Record<string, Form03Evalu
   );
 }
 
+// Helper to clean undefined values before sending to Firestore
+function sanitizeForFirestore<T>(data: T): any {
+  return JSON.parse(JSON.stringify(data, (_, value) => {
+    return value === undefined ? null : value;
+  }));
+}
+
 /**
  * Save single Teacher
  */
 export async function saveTeacherToFirestore(teacher: Teacher) {
   try {
-    await setDoc(doc(db, TEACHERS_COL, teacher.id), teacher, { merge: true });
+    const cleanData = sanitizeForFirestore(teacher);
+    await setDoc(doc(db, TEACHERS_COL, teacher.id), cleanData, { merge: true });
+    return { success: true };
   } catch (error) {
     console.error('Error saving teacher to Firestore:', error);
+    return { success: false, error };
   }
 }
 
@@ -136,9 +146,12 @@ export async function saveTeacherToFirestore(teacher: Teacher) {
  */
 export async function saveForm01ToFirestore(docKey: string, data: Form01Data) {
   try {
-    await setDoc(doc(db, FORM01_COL, docKey), { ...data, docKey }, { merge: true });
+    const cleanData = sanitizeForFirestore({ ...data, docKey });
+    await setDoc(doc(db, FORM01_COL, docKey), cleanData, { merge: true });
+    return { success: true };
   } catch (error) {
     console.error('Error saving Form 01 to Firestore:', error);
+    return { success: false, error };
   }
 }
 
@@ -147,8 +160,11 @@ export async function saveForm01ToFirestore(docKey: string, data: Form01Data) {
  */
 export async function saveEvaluationToFirestore(docKey: string, data: Form03Evaluation) {
   try {
-    await setDoc(doc(db, EVALUATIONS_COL, docKey), { ...data, docKey }, { merge: true });
+    const cleanData = sanitizeForFirestore({ ...data, docKey });
+    await setDoc(doc(db, EVALUATIONS_COL, docKey), cleanData, { merge: true });
+    return { success: true };
   } catch (error) {
     console.error('Error saving Evaluation to Firestore:', error);
+    return { success: false, error };
   }
 }

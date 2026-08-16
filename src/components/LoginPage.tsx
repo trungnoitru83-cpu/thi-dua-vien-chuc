@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { Mail, Lock, ShieldCheck, User, Users, ArrowRight, BookOpen, AlertTriangle, CheckCircle, X, Search, KeyRound, UserCheck } from 'lucide-react';
+import { Mail, Lock, ShieldCheck, User, Users, ArrowRight, BookOpen, AlertTriangle, CheckCircle, X, Search, KeyRound, UserCheck, FileSpreadsheet, Check } from 'lucide-react';
 import { Teacher, Role } from '../types';
 import { auth } from '../lib/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { isLeaderTeacher, getDefaultRoleForTeacher, getFormTypeForTeacher } from '../data/form03Criteria';
 
 interface LoginPageProps {
   teachers: Teacher[];
@@ -296,6 +297,40 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
         )}
 
+        {/* Permission Rules Summary Card */}
+        <div className="mb-5 p-3.5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-slate-800 dark:to-slate-800/90 rounded-2xl border border-blue-200 dark:border-slate-700 text-xs shadow-xs">
+          <div className="flex items-center gap-2 mb-2 font-black text-slate-800 dark:text-slate-100">
+            <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+            <span>QUY ĐỊNH PHÂN QUYỀN TRUY CẬP HỆ THỐNG</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-blue-200/80 dark:border-slate-700">
+              <span className="inline-block px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 font-extrabold text-[10px] mb-1">
+                TRUY CẬP MẪU 03
+              </span>
+              <p className="font-bold text-slate-700 dark:text-slate-200">
+                • Giáo viên (GV)<br/>
+                • Nhân viên (NV)
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Mặc định vào Phiếu đánh giá Mẫu 03
+              </p>
+            </div>
+            <div className="p-2 bg-white dark:bg-slate-900 rounded-xl border border-amber-200/80 dark:border-slate-700">
+              <span className="inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 font-extrabold text-[10px] mb-1">
+                TRUY CẬP MẪU 02
+              </span>
+              <p className="font-bold text-slate-700 dark:text-slate-200">
+                • TTCM &amp; TPCM<br/>
+                • Hiệu trưởng (HT) &amp; Hiệu phó (HP)
+              </p>
+              <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                Mặc định vào Phiếu đánh giá Mẫu 02
+              </p>
+            </div>
+          </div>
+        </div>
+
         {/* Quick Select Registered Teacher Google Email */}
         <div className="mb-5 p-3.5 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700">
           <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
@@ -303,24 +338,60 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <Search className="w-3.5 h-3.5 text-blue-600" />
               <span>Chọn nhanh Email Cán bộ ({teachers.length} người):</span>
             </span>
-            <span className="text-[10px] text-blue-600 font-semibold">Tự động điền Email</span>
+            <span className="text-[10px] text-blue-600 font-semibold">Tự động nhận diện Chức vụ &amp; Mẫu</span>
           </label>
 
           <select
             value={email}
             onChange={(e) => {
-              setEmail(e.target.value);
+              const selectedEmail = e.target.value;
+              setEmail(selectedEmail);
               setErrorMessage('');
+              const matched = teachers.find(t => t.email === selectedEmail);
+              if (matched) {
+                const autoRole = getDefaultRoleForTeacher(matched);
+                setRole(autoRole);
+              }
             }}
             className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-600"
           >
             <option value="">-- Chọn cán bộ/giáo viên từ danh sách --</option>
-            {teachers.map((t, idx) => (
-              <option key={t.id} value={t.email}>
-                {idx + 1}. {t.fullName} ({t.email})
-              </option>
-            ))}
+            {teachers.map((t, idx) => {
+              const isLead = isLeaderTeacher(t);
+              const formBadge = isLead ? '[Mẫu 02]' : '[Mẫu 03]';
+              return (
+                <option key={t.id} value={t.email}>
+                  {idx + 1}. {t.fullName} ({t.position || t.subject}) - {formBadge}
+                </option>
+              );
+            })}
           </select>
+          
+          {/* Visual indicator of matched teacher and default form access */}
+          {(() => {
+            const matchedTeacher = teachers.find(t => t.email.toLowerCase() === email.trim().toLowerCase());
+            if (!matchedTeacher) return null;
+            const isLead = isLeaderTeacher(matchedTeacher);
+            return (
+              <div className={`mt-2.5 p-2 rounded-xl border text-xs font-bold flex items-center justify-between ${
+                isLead
+                  ? 'bg-amber-50 dark:bg-amber-950/80 text-amber-900 dark:text-amber-200 border-amber-300 dark:border-amber-700'
+                  : 'bg-blue-50 dark:bg-blue-950/80 text-blue-900 dark:text-blue-200 border-blue-300 dark:border-blue-700'
+              }`}>
+                <div>
+                  <p className="font-extrabold">{matchedTeacher.fullName} ({matchedTeacher.position || matchedTeacher.subject})</p>
+                  <p className="text-[10px] font-medium opacity-85">Tổ: {matchedTeacher.department}</p>
+                </div>
+                <span className={`px-2 py-1 rounded-lg text-[10px] font-black uppercase ${
+                  isLead
+                    ? 'bg-amber-600 text-white shadow-xs'
+                    : 'bg-blue-600 text-white shadow-xs'
+                }`}>
+                  {isLead ? 'Mặc định: MẪU 02' : 'Mặc định: MẪU 03'}
+                </span>
+              </div>
+            );
+          })()}
         </div>
 
         <form onSubmit={handleFormSubmit} className="space-y-4">

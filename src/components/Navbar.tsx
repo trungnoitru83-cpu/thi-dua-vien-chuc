@@ -1,6 +1,7 @@
 import React from 'react';
-import { LogIn, UserCheck, FileSpreadsheet, BarChart3, Calendar, Award, LogOut, ChevronDown, CloudCheck } from 'lucide-react';
+import { LogIn, UserCheck, FileSpreadsheet, BarChart3, Calendar, Award, LogOut, ChevronDown, CloudCheck, ShieldCheck } from 'lucide-react';
 import { Teacher, Role } from '../types';
+import { isLeaderTeacher } from '../data/form03Criteria';
 
 interface NavbarProps {
   activeTab: 'login' | 'profile' | 'evaluation' | 'summary';
@@ -27,12 +28,16 @@ export const Navbar: React.FC<NavbarProps> = ({
   onLogout,
   teacherCount
 }) => {
+  const isLeader = isLeaderTeacher(currentUser || undefined);
+
   const roleLabel = {
-    teacher: 'Giáo viên',
-    department_head: 'Tổ trưởng chuyên môn',
-    principal: 'Hiệu trưởng / Ban giám hiệu',
-    staff: 'Nhân viên / Cán bộ'
-  }[currentRole] || 'Cán bộ';
+    teacher: 'Giáo viên (Mẫu 03)',
+    department_head: 'Tổ trưởng / TPCM (Mẫu 02)',
+    principal: 'Ban Giám Hiệu / HT / HP (Mẫu 02)',
+    staff: 'Nhân viên (Mẫu 03)'
+  }[currentRole] || (isLeader ? 'Lãnh đạo (Mẫu 02)' : 'Cán bộ (Mẫu 03)');
+
+  const formTabLabel = isLeader ? 'Trang 3: Chấm Điểm Mẫu 02' : 'Trang 3: Chấm Điểm Mẫu 03';
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 shadow-xs">
@@ -68,7 +73,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <nav className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/60 p-1 rounded-xl border border-slate-200/60 dark:border-slate-800">
               <button
                 onClick={() => setActiveTab('login')}
-                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
                   activeTab === 'login'
                     ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
@@ -80,31 +85,35 @@ export const Navbar: React.FC<NavbarProps> = ({
 
               <button
                 onClick={() => setActiveTab('profile')}
-                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
                   activeTab === 'profile'
                     ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
                 }`}
               >
                 <UserCheck className="w-4 h-4" />
-                <span>Trang 2: Thông Tin & Mẫu 01</span>
+                <span>Trang 2: Mẫu 01</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('evaluation')}
-                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-lg transition-all ${
                   activeTab === 'evaluation'
-                    ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
+                    ? (isLeader 
+                        ? 'bg-amber-500 text-white shadow-xs' 
+                        : 'bg-blue-600 text-white shadow-xs')
+                    : (isLeader
+                        ? 'text-amber-700 dark:text-amber-300 hover:bg-amber-100/60 dark:hover:bg-amber-950/50'
+                        : 'text-blue-700 dark:text-blue-300 hover:bg-blue-100/60 dark:hover:bg-blue-950/50')
                 }`}
               >
                 <FileSpreadsheet className="w-4 h-4" />
-                <span>Trang 3: Bảng Chấm Điểm</span>
+                <span>{formTabLabel}</span>
               </button>
 
               <button
                 onClick={() => setActiveTab('summary')}
-                className={`flex items-center gap-2 px-3.5 py-2 text-xs font-semibold rounded-lg transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg transition-all ${
                   activeTab === 'summary'
                     ? 'bg-white dark:bg-slate-900 text-blue-700 dark:text-blue-400 shadow-xs'
                     : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 hover:bg-slate-200/50 dark:hover:bg-slate-700/50'
@@ -150,15 +159,23 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Current User Info */}
             {currentUser ? (
-              <div className="flex items-center gap-2 bg-blue-50 dark:bg-blue-950/50 border border-blue-200/80 dark:border-blue-800/80 p-1.5 pr-3 rounded-xl">
-                <div className="w-8 h-8 rounded-lg bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+              <div className={`flex items-center gap-2 p-1.5 pr-3 rounded-xl border ${
+                isLeader 
+                  ? 'bg-amber-50 dark:bg-amber-950/50 border-amber-300 dark:border-amber-800' 
+                  : 'bg-blue-50 dark:bg-blue-950/50 border-blue-200/80 dark:border-blue-800/80'
+              }`}>
+                <div className={`w-8 h-8 rounded-lg text-white flex items-center justify-center font-bold text-xs shadow-xs ${
+                  isLeader ? 'bg-amber-600' : 'bg-blue-600'
+                }`}>
                   {currentUser.fullName.charAt(0)}
                 </div>
                 <div className="hidden lg:block text-left leading-tight">
                   <p className="text-xs font-bold text-slate-900 dark:text-slate-100 max-w-[130px] truncate">
                     {currentUser.fullName}
                   </p>
-                  <p className="text-[10px] text-blue-700 dark:text-blue-300 font-medium">
+                  <p className={`text-[10px] font-bold ${
+                    isLeader ? 'text-amber-700 dark:text-amber-300' : 'text-blue-700 dark:text-blue-300'
+                  }`}>
                     {roleLabel}
                   </p>
                 </div>
@@ -201,15 +218,17 @@ export const Navbar: React.FC<NavbarProps> = ({
                 activeTab === 'profile' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
               }`}
             >
-              Trang 2: Thông tin & Mẫu 01
+              Trang 2: Mẫu 01
             </button>
             <button
               onClick={() => setActiveTab('evaluation')}
               className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap rounded-lg ${
-                activeTab === 'evaluation' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                activeTab === 'evaluation' 
+                  ? (isLeader ? 'bg-amber-600 text-white font-bold' : 'bg-blue-600 text-white font-bold') 
+                  : (isLeader ? 'bg-amber-100 text-amber-900 font-bold' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300')
               }`}
             >
-              Trang 3: Bảng chấm Mẫu 03
+              {isLeader ? 'Trang 3: Mẫu 02' : 'Trang 3: Mẫu 03'}
             </button>
             <button
               onClick={() => setActiveTab('summary')}
