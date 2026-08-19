@@ -6,13 +6,50 @@ import {
   getDocs,
   query
 } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
 import { Teacher, Form01Data, Form03Evaluation } from '../types';
 
 // Collection references
 const TEACHERS_COL = 'teachers';
 const FORM01_COL = 'form01';
 const EVALUATIONS_COL = 'evaluations';
+
+export enum OperationType {
+  CREATE = 'create',
+  UPDATE = 'update',
+  DELETE = 'delete',
+  LIST = 'list',
+  GET = 'get',
+  WRITE = 'write',
+}
+
+export interface FirestoreErrorInfo {
+  error: string;
+  operationType: OperationType;
+  path: string | null;
+  authInfo: {
+    userId?: string | null;
+    email?: string | null;
+    emailVerified?: boolean | null;
+    isAnonymous?: boolean | null;
+  };
+}
+
+export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo: FirestoreErrorInfo = {
+    error: error instanceof Error ? error.message : String(error),
+    authInfo: {
+      userId: auth.currentUser?.uid || null,
+      email: auth.currentUser?.email || null,
+      emailVerified: auth.currentUser?.emailVerified || false,
+      isAnonymous: auth.currentUser?.isAnonymous || false,
+    },
+    operationType,
+    path
+  };
+  console.warn('Firestore Operation Notice:', JSON.stringify(errInfo));
+  return errInfo;
+}
 
 /**
  * Seed initial 36 teachers, Mẫu 01, Mẫu 03 into Firestore if collection is empty
@@ -27,7 +64,7 @@ export async function syncInitialDataToFirestore(
     if (teachersSnap.empty) {
       console.log('Seeding initial 36 teachers to Firestore...');
       for (const teacher of initialTeachers) {
-        await setDoc(doc(db, TEACHERS_COL, teacher.id), teacher);
+        await setDoc(doc(db, TEACHERS_COL, teacher.id), sanitizeForFirestore(teacher));
       }
     }
 
@@ -47,7 +84,8 @@ export async function syncInitialDataToFirestore(
       }
     }
   } catch (error) {
-    console.warn('Error seeding initial data to Firestore (will use local fallback):', error);
+    handleFirestoreError(error, OperationType.GET, TEACHERS_COL);
+    console.warn('Error seeding initial data to Firestore (using local fallback state)');
   }
 }
 
@@ -67,7 +105,7 @@ export function listenToTeachers(onData: (teachers: Teacher[]) => void) {
       }
     },
     (error) => {
-      console.warn('Firestore listen error (teachers):', error);
+      handleFirestoreError(error, OperationType.LIST, TEACHERS_COL);
     }
   );
 }
@@ -91,7 +129,7 @@ export function listenToForm01(onData: (form01Map: Record<string, Form01Data>) =
       }
     },
     (error) => {
-      console.warn('Firestore listen error (form01):', error);
+      handleFirestoreError(error, OperationType.LIST, FORM01_COL);
     }
   );
 }
@@ -115,7 +153,7 @@ export function listenToEvaluations(onData: (evalMap: Record<string, Form03Evalu
       }
     },
     (error) => {
-      console.warn('Firestore listen error (evaluations):', error);
+      handleFirestoreError(error, OperationType.LIST, EVALUATIONS_COL);
     }
   );
 }
@@ -136,7 +174,7 @@ export async function saveTeacherToFirestore(teacher: Teacher) {
     await setDoc(doc(db, TEACHERS_COL, teacher.id), cleanData, { merge: true });
     return { success: true };
   } catch (error) {
-    console.error('Error saving teacher to Firestore:', error);
+    handleFirestoreError(error, OperationType.WRITE, `${TEACHERS_COL}/${teacher.id}`);
     return { success: false, error };
   }
 }
@@ -150,7 +188,7 @@ export async function saveForm01ToFirestore(docKey: string, data: Form01Data) {
     await setDoc(doc(db, FORM01_COL, docKey), cleanData, { merge: true });
     return { success: true };
   } catch (error) {
-    console.error('Error saving Form 01 to Firestore:', error);
+    handleFirestoreError(error, OperationType.WRITE, `${FORM01_COL}/${docKey}`);
     return { success: false, error };
   }
 }
@@ -164,7 +202,7 @@ export async function saveEvaluationToFirestore(docKey: string, data: Form03Eval
     await setDoc(doc(db, EVALUATIONS_COL, docKey), cleanData, { merge: true });
     return { success: true };
   } catch (error) {
-    console.error('Error saving Evaluation to Firestore:', error);
+    handleFirestoreError(error, OperationType.WRITE, `${EVALUATIONS_COL}/${docKey}`);
     return { success: false, error };
   }
 }

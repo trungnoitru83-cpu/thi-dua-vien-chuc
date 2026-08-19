@@ -1,7 +1,7 @@
 import { Form03Evaluation, Teacher } from '../types';
 
 const DEFAULT_GOOGLE_SHEET_API_URL =
-  'https://script.google.com/macros/s/AKfycbztwdSGoP_q9VmnA3aQGuuxX3C-TrtRUqnqXeq14_UCNmA7MgmQQkmE2fMOMt2HtrOM/exec';
+  'https://script.google.com/macros/s/AKfycbywWV9Hdi0RyUhZSO_FOiGALBRPBr388611e2C_AoR4uCzqVMOPhhnl6Rue_smTlTYP/exec';
 
 const GOOGLE_SHEET_API_URL =
   import.meta.env.VITE_GOOGLE_SHEET_API_URL || DEFAULT_GOOGLE_SHEET_API_URL;
@@ -138,7 +138,7 @@ export async function syncAllTeachersToGoogleSheet(
   let successCount = 0;
 
   for (const t of teachers) {
-    const ev = evaluations[`${t.id}_y2026_m${month}`] || evaluations[t.id];
+    const ev = evaluations[`${t.id}_y${year}_m${month}`] || evaluations[`${t.id}_y2026_m${month}`] || evaluations[t.id];
     if (ev) {
       const res = await saveEvaluationToGoogleSheet(t, ev, month, year);
       if (res.success) {

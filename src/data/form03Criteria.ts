@@ -676,8 +676,8 @@ export const FORM_03_CRITERIA: CriteriaItem[] = [
     code: 'A.II.1.a',
     title: 'Có kiến thức chuyên sâu, toàn diện về lĩnh vực công tác được phân công; hiểu biết đầy đủ về quy định pháp luật, quy trình nghiệp vụ có liên quan đến vị trí việc làm',
     description: 'Kiến thức chuyên sâu, nắm vững pháp luật nghiệp vụ.',
-    maxPoints: 0.5,
-    scoreOptions: generate025Options(0.5)
+    maxPoints: 1.0,
+    scoreOptions: generate025Options(1.0)
   },
   {
     id: 'A_II_1_b',

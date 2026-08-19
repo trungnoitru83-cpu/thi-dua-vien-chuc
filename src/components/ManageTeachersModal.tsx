@@ -92,7 +92,7 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({
           <div className="flex items-center gap-2">
             <button
               onClick={() => setShowAddForm(!showAddForm)}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 btn-teacher text-white font-black text-xs rounded-xl shadow-xs transition cursor-pointer"
             >
               <UserPlus className="w-4 h-4" />
               <span>{showAddForm ? 'Đóng form thêm' : 'Thêm giáo viên mới'}</span>
@@ -100,7 +100,7 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({
 
             <button
               onClick={onClose}
-              className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl transition"
+              className="p-1.5 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 rounded-xl transition cursor-pointer"
             >
               <X className="w-5 h-5" />
             </button>
@@ -156,7 +156,7 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({
             <div className="flex justify-end mt-3">
               <button
                 type="submit"
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
+                className="flex items-center gap-1.5 px-4 py-2 btn-teacher text-white font-black text-xs rounded-xl shadow-xs transition cursor-pointer"
               >
                 <Check className="w-4 h-4" />
                 <span>Xác nhận thêm GV</span>
@@ -298,7 +298,7 @@ export const ManageTeachersModal: React.FC<ManageTeachersModalProps> = ({
           <button
             type="button"
             onClick={onClose}
-            className="px-5 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 font-bold text-xs rounded-xl transition"
+            className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white font-black text-xs rounded-xl transition cursor-pointer"
           >
             Đóng cửa sổ
           </button>

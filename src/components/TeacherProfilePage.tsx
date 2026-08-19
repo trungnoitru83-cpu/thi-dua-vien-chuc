@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { User, Calendar, GraduationCap, Building2, School, Link as LinkIcon, FileText, CheckCircle, Plus, Trash2, ExternalLink, Save, ArrowRight, ChevronLeft, ChevronRight, Users, Send, Award, FileSpreadsheet, ShieldCheck, Copy } from 'lucide-react';
 import { Teacher, Form01Data, Form01Task, Form03Evaluation, Role } from '../types';
 import { isLeaderTeacher, getClassification, getClassificationLabel } from '../data/form03Criteria';
+import { getTeacherEmulationCode } from '../data/mockTeachers';
 
 interface TeacherProfilePageProps {
   teachers?: Teacher[];
@@ -9,6 +10,7 @@ interface TeacherProfilePageProps {
   form01: Form01Data;
   evaluation?: Form03Evaluation;
   selectedMonth: number;
+  selectedYear?: number;
   currentRole: Role;
   onSelectTeacher?: (teacher: Teacher) => void;
   onUpdateTeacher: (updated: Teacher) => void;
@@ -22,6 +24,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
   form01,
   evaluation,
   selectedMonth,
+  selectedYear = 2026,
   currentRole,
   onSelectTeacher,
   onUpdateTeacher,
@@ -35,7 +38,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
   const [subject, setSubject] = useState(teacher.subject);
   const [department, setDepartment] = useState(teacher.department);
   const [school, setSchool] = useState(teacher.school);
-  const [evaluationDate, setEvaluationDate] = useState(`2026-0${selectedMonth}-28`);
+  const [evaluationDate, setEvaluationDate] = useState(`${selectedYear}-${selectedMonth < 10 ? '0' + selectedMonth : selectedMonth}-28`);
 
   // Local state for Form 01
   const [attachedFileUrl, setAttachedFileUrl] = useState(
@@ -59,8 +62,8 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
     );
     setOverallSummary(form01.overallSummary || '');
     setTasks(form01.tasks || []);
-    setEvaluationDate(`2026-${selectedMonth < 10 ? '0' + selectedMonth : selectedMonth}-28`);
-  }, [teacher, form01, selectedMonth]);
+    setEvaluationDate(`${selectedYear}-${selectedMonth < 10 ? '0' + selectedMonth : selectedMonth}-28`);
+  }, [teacher, form01, selectedMonth, selectedYear]);
 
   // Indexing for teacher navigation
   const currentIndex = teachers.findIndex(t => t.id === teacher.id);
@@ -74,7 +77,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
   const partB = evaluation ? Math.min(70, evaluation.totalPartB_Principal) : 60;
   const bonusVal = evaluation ? (evaluation.totalBonus_Principal || 0) : 0;
   const dedVal = evaluation ? (evaluation.totalDeduction_Principal || 0) : 0;
-  const grandTotalVal = evaluation ? (evaluation.grandTotal_Principal ?? Math.min(100, partA + partB)) : Math.min(100, partA + partB);
+  const grandTotalVal = evaluation ? (evaluation.grandTotal_Principal ?? Math.min(100, Math.max(0, Math.round((partA + partB + bonusVal - dedVal) * 100) / 100))) : Math.min(100, Math.max(0, Math.round((partA + partB) * 100) / 100));
   const clsType = getClassification(grandTotalVal);
   const clsLabel = getClassificationLabel(clsType);
 
@@ -145,7 +148,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
               TRANG 2: HỒ SƠ & MẪU 01
             </span>
             <span className="text-xs text-slate-500 font-semibold">
-              Tháng {selectedMonth}/2026
+              Tháng {selectedMonth}/{selectedYear}
             </span>
           </div>
           <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white">
@@ -158,8 +161,8 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
 
         <button
           onClick={onNavigateToForm03}
-          className={`flex items-center gap-2 px-5 py-2.5 text-white font-bold text-xs rounded-2xl shadow-md transition shrink-0 ${
-            isLeader ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+          className={`flex items-center gap-2 px-5 py-2.5 text-white font-black text-xs rounded-2xl shadow-md transition shrink-0 cursor-pointer ${
+            isLeader ? 'btn-principal' : 'btn-teacher'
           }`}
         >
           <span>{isLeader ? 'Chuyển sang Bảng chấm Mẫu 02 (TTCM, TPCM, HT, HP)' : 'Chuyển sang Bảng chấm Mẫu 03 (GV, NV)'}</span>
@@ -188,11 +191,14 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
                 }}
                 className="px-3 py-1.5 bg-slate-100 dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-xl text-xs font-bold text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-600"
               >
-                {teachers.map((t, idx) => (
-                  <option key={t.id} value={t.id}>
-                    {idx + 1}. {t.fullName} ({t.subject})
-                  </option>
-                ))}
+                {teachers.map((t, idx) => {
+                  const code = t.emulationCode || getTeacherEmulationCode(t, idx);
+                  return (
+                    <option key={t.id} value={t.id}>
+                      {code} - {t.fullName} ({t.subject})
+                    </option>
+                  );
+                })}
               </select>
             </div>
 
@@ -202,7 +208,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
                 type="button"
                 disabled={!prevTeacher}
                 onClick={() => prevTeacher && onSelectTeacher(prevTeacher)}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold disabled:opacity-40 hover:bg-slate-200 transition flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-xs font-black disabled:opacity-40 transition flex items-center gap-1 cursor-pointer"
               >
                 <ChevronLeft className="w-4 h-4" />
                 <span>GV Trước</span>
@@ -212,7 +218,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
                 type="button"
                 disabled={!nextTeacher}
                 onClick={() => nextTeacher && onSelectTeacher(nextTeacher)}
-                className="px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold disabled:opacity-40 hover:bg-slate-200 transition flex items-center gap-1"
+                className="px-3 py-1.5 rounded-xl bg-slate-200 hover:bg-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-900 dark:text-white text-xs font-black disabled:opacity-40 transition flex items-center gap-1 cursor-pointer"
               >
                 <span>GV Tiếp</span>
                 <ChevronRight className="w-4 h-4" />
@@ -222,20 +228,27 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
 
           {/* Horizontally scrollable list of teacher pills */}
           <div className="mt-3 flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
-            {teachers.map((t, idx) => (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => onSelectTeacher(t)}
-                className={`px-3 py-1.5 text-xs font-bold rounded-xl whitespace-nowrap transition shrink-0 ${
-                  t.id === teacher.id
-                    ? 'bg-blue-600 text-white shadow-xs'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-700'
-                }`}
-              >
-                {idx + 1}. {t.fullName.split(' ').pop()}
-              </button>
-            ))}
+            {teachers.map((t, idx) => {
+              const code = t.emulationCode || getTeacherEmulationCode(t, idx);
+              const isCurrent = t.id === teacher.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => onSelectTeacher(t)}
+                  className={`px-3 py-1.5 text-xs font-black rounded-xl whitespace-nowrap transition shrink-0 flex items-center gap-1 border-2 cursor-pointer ${
+                    isCurrent
+                      ? 'btn-theme border-transparent shadow-md'
+                      : 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border-slate-300 dark:border-slate-700 hover:border-slate-500 hover:bg-slate-100'
+                  }`}
+                >
+                  <span className={`text-[10px] font-mono font-black px-1 rounded ${isCurrent ? 'bg-white text-slate-950 shadow-xs' : 'bg-slate-900 text-white dark:bg-slate-700'}`}>
+                    {code}
+                  </span>
+                  <span>{t.fullName.split(' ').pop()}</span>
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
@@ -559,7 +572,7 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
               <button
                 type="button"
                 onClick={handleAddTask}
-                className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 hover:bg-blue-200 font-bold text-xs rounded-xl transition"
+                className="flex items-center gap-1.5 px-3.5 py-2 btn-teacher text-white font-black text-xs rounded-xl shadow-sm transition cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Thêm nhiệm vụ
@@ -661,12 +674,12 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
         </div>
 
         {/* Save & Navigation Action Bar at bottom of Trang 2 */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-100 dark:bg-slate-800/80 p-5 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-200/90 dark:bg-slate-800 p-5 rounded-2xl border-2 border-slate-300 dark:border-slate-700 shadow-sm">
           <div>
-            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">
-              Hoàn tất cập nhật hồ sơ Mẫu 01 của cán bộ: <span className="text-blue-600 dark:text-blue-400 font-extrabold">{teacher.fullName}</span>
+            <p className="text-xs font-black text-slate-900 dark:text-slate-100">
+              Hoàn tất cập nhật hồ sơ Mẫu 01 của cán bộ: <span className="text-blue-700 dark:text-blue-300 font-black">{teacher.fullName}</span>
             </p>
-            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+            <p className="text-[11px] text-slate-600 dark:text-slate-300 font-bold mt-0.5">
               Xác nhận nộp Mẫu 01 rồi chuyển tiếp sang Trang 3 để tính điểm thi đua ({isLeader ? 'Mẫu 02 cho CBQL' : 'Mẫu 03 cho Giáo viên/Nhân viên'}).
             </p>
           </div>
@@ -674,10 +687,10 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
           <div className="flex flex-wrap items-center gap-3 w-full sm:w-auto justify-end">
             <button
               type="submit"
-              className={`flex items-center gap-2 px-6 py-3 font-bold text-xs rounded-xl shadow-lg transition ${
+              className={`flex items-center gap-2 px-6 py-3 font-black text-xs rounded-xl shadow-lg transition cursor-pointer ${
                 savedSuccess
-                  ? 'bg-emerald-600 ring-4 ring-emerald-300 dark:ring-emerald-800 text-white animate-pulse'
-                  : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/20'
+                  ? 'btn-teacher ring-4 ring-blue-300 dark:ring-blue-800 text-white animate-pulse'
+                  : 'btn-teacher text-white shadow-blue-700/30'
               }`}
             >
               {savedSuccess ? (
@@ -696,7 +709,9 @@ export const TeacherProfilePage: React.FC<TeacherProfilePageProps> = ({
             <button
               type="button"
               onClick={onNavigateToForm03}
-              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-extrabold text-xs rounded-xl shadow-lg shadow-blue-600/20 transition"
+              className={`flex items-center gap-2 px-6 py-3 font-black text-xs rounded-xl shadow-lg transition cursor-pointer text-white ${
+                isLeader ? 'btn-principal' : 'btn-teacher'
+              }`}
             >
               <span>{isLeader ? 'Chuyển sang tính điểm Mẫu 02 (CBQL)' : 'Chuyển sang tính điểm Mẫu 03 (GV, NV)'}</span>
               <ArrowRight className="w-4 h-4" />

@@ -1,8 +1,48 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Teachers collection
+    match /teachers/{teacherId} {
+      allow read: if true;
+      allow write: if isValidId(teacherId) &&
+        incoming().id is string &&
+        incoming().fullName is string &&
+        incoming().fullName.size() > 0;
+    }
+
+    // Form 01 submissions
+    match /form01/{docKey} {
+      allow read: if true;
+      allow write: if isValidId(docKey) &&
+        incoming().teacherId is string &&
+        incoming().teacherId.size() > 0;
+    }
+
+    // Evaluations (Form 03 / Form 02)
+    match /evaluations/{evalKey} {
+      allow read: if true;
+      allow write: if isValidId(evalKey) &&
+        incoming().teacherId is string &&
+        incoming().teacherId.size() > 0;
+    }
+
+    // Default deny catch-all
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

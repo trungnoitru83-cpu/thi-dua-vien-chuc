@@ -8,8 +8,10 @@ export type ClassificationType =
 
 export interface Teacher {
   id: string;
+  emulationCode?: string; // Mã thi đua: TĐ0001 - TĐ0036
   fullName: string;
   email: string;
+  phone?: string; // Số điện thoại đăng ký
   dob: string; // DD/MM/YYYY
   position?: string; // Chức vụ: Hiệu trưởng, Phó hiệu trưởng, TTCM, Giáo viên...
   subject: string; // Bộ môn giảng dạy

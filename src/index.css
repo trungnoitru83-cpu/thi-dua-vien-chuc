@@ -1,1 +1,230 @@
 @import "tailwindcss";
+
+:root {
+  --theme-primary: #1d4ed8;
+  --theme-primary-hover: #1e40af;
+  --theme-gradient-from: #1e3a8a;
+  --theme-gradient-to: #2563eb;
+  --theme-accent-bg: #eff6ff;
+  --theme-accent-bg-dark: rgba(30, 58, 138, 0.4);
+  --theme-accent-text: #1e40af;
+  --theme-accent-text-dark: #93c5fd;
+  --theme-accent-border: #93c5fd;
+  --theme-accent-border-dark: #1e40af;
+  --theme-dot: #1d4ed8;
+}
+
+[data-theme-color="blue"] {
+  --theme-primary: #1d4ed8;
+  --theme-primary-hover: #1e40af;
+  --theme-gradient-from: #1e3a8a;
+  --theme-gradient-to: #2563eb;
+  --theme-accent-bg: #eff6ff;
+  --theme-accent-bg-dark: rgba(30, 58, 138, 0.4);
+  --theme-accent-text: #1e40af;
+  --theme-accent-text-dark: #93c5fd;
+  --theme-accent-border: #93c5fd;
+  --theme-accent-border-dark: #1e40af;
+  --theme-dot: #1d4ed8;
+}
+
+[data-theme-color="emerald"] {
+  --theme-primary: #047857;
+  --theme-primary-hover: #065f46;
+  --theme-gradient-from: #064e3b;
+  --theme-gradient-to: #059669;
+  --theme-accent-bg: #ecfdf5;
+  --theme-accent-bg-dark: rgba(6, 78, 59, 0.4);
+  --theme-accent-text: #065f46;
+  --theme-accent-text-dark: #6ee7b7;
+  --theme-accent-border: #6ee7b7;
+  --theme-accent-border-dark: #047857;
+  --theme-dot: #047857;
+}
+
+[data-theme-color="red"] {
+  --theme-primary: #be123c;
+  --theme-primary-hover: #9f1239;
+  --theme-gradient-from: #881337;
+  --theme-gradient-to: #e11d48;
+  --theme-accent-bg: #fff1f2;
+  --theme-accent-bg-dark: rgba(136, 19, 55, 0.4);
+  --theme-accent-text: #9f1239;
+  --theme-accent-text-dark: #fda4af;
+  --theme-accent-border: #fda4af;
+  --theme-accent-border-dark: #be123c;
+  --theme-dot: #be123c;
+}
+
+[data-theme-color="violet"] {
+  --theme-primary: #6d28d9;
+  --theme-primary-hover: #5b21b6;
+  --theme-gradient-from: #4c1d95;
+  --theme-gradient-to: #7c3aed;
+  --theme-accent-bg: #f5f3ff;
+  --theme-accent-bg-dark: rgba(76, 29, 149, 0.4);
+  --theme-accent-text: #5b21b6;
+  --theme-accent-text-dark: #c4b5fd;
+  --theme-accent-border: #c4b5fd;
+  --theme-accent-border-dark: #6d28d9;
+  --theme-dot: #6d28d9;
+}
+
+[data-theme-color="amber"] {
+  --theme-primary: #b45309;
+  --theme-primary-hover: #92400e;
+  --theme-gradient-from: #78350f;
+  --theme-gradient-to: #d97706;
+  --theme-accent-bg: #fffbeb;
+  --theme-accent-bg-dark: rgba(120, 53, 15, 0.4);
+  --theme-accent-text: #92400e;
+  --theme-accent-text-dark: #fcd34d;
+  --theme-accent-border: #fcd34d;
+  --theme-accent-border-dark: #b45309;
+  --theme-dot: #b45309;
+}
+
+[data-theme-color="cyan"] {
+  --theme-primary: #0e7490;
+  --theme-primary-hover: #155e75;
+  --theme-gradient-from: #164e63;
+  --theme-gradient-to: #0891b2;
+  --theme-accent-bg: #ecfeff;
+  --theme-accent-bg-dark: rgba(22, 78, 99, 0.4);
+  --theme-accent-text: #155e75;
+  --theme-accent-text-dark: #67e8f9;
+  --theme-accent-border: #67e8f9;
+  --theme-accent-border-dark: #0e7490;
+  --theme-dot: #0e7490;
+}
+
+/* Reusable High-Contrast Theme & Action Button Classes */
+.btn-theme {
+  background-color: var(--theme-primary);
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  letter-spacing: 0.01em;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: all 0.15s ease-in-out;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.12), 0 2px 4px -2px rgba(0, 0, 0, 0.12);
+}
+.btn-theme:hover {
+  background-color: var(--theme-primary-hover);
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 10px -1px rgba(0, 0, 0, 0.18), 0 2px 4px -2px rgba(0, 0, 0, 0.12);
+}
+.btn-theme:active {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+/* Nút điều khiển của Giáo viên: Màu Xanh (Blue) */
+.btn-teacher, .btn-solid-blue {
+  background-color: #1d4ed8 !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: all 0.15s ease-in-out;
+}
+.btn-teacher:hover, .btn-solid-blue:hover {
+  background-color: #1e40af !important;
+  filter: brightness(1.05);
+}
+
+/* Nút điều khiển của Hiệu trưởng: Màu Nâu (Brown) */
+.btn-principal, .btn-solid-brown {
+  background-color: #78350f !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: all 0.15s ease-in-out;
+}
+.btn-principal:hover, .btn-solid-brown:hover {
+  background-color: #58260b !important;
+  filter: brightness(1.08);
+}
+
+.btn-solid-emerald {
+  background-color: #047857 !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.btn-solid-emerald:hover {
+  background-color: #065f46 !important;
+}
+
+.btn-solid-indigo {
+  background-color: #4338ca !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.btn-solid-indigo:hover {
+  background-color: #3730a3 !important;
+}
+
+.btn-solid-amber {
+  background-color: #78350f !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.btn-solid-amber:hover {
+  background-color: #58260b !important;
+}
+
+.btn-solid-dark {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+.btn-solid-dark:hover {
+  background-color: #1e293b !important;
+}
+
+/* Toàn bộ hệ thống chữ màu đen chuẩn, rõ nét */
+body {
+  color: #0f172a;
+}
+.dark body {
+  color: #f8fafc;
+}
+
+.bg-theme {
+  background-color: var(--theme-primary);
+}
+
+.text-theme {
+  color: var(--theme-primary);
+}
+
+.border-theme {
+  border-color: var(--theme-primary);
+}
+
+.bg-theme-gradient {
+  background-image: linear-gradient(135deg, var(--theme-gradient-from), var(--theme-gradient-to));
+}
+
+.bg-theme-accent {
+  background-color: var(--theme-accent-bg);
+}
+.dark .bg-theme-accent {
+  background-color: var(--theme-accent-bg-dark);
+}
+
+.text-theme-accent {
+  color: var(--theme-accent-text);
+}
+.dark .text-theme-accent {
+  color: var(--theme-accent-text-dark);
+}
+
+.border-theme-accent {
+  border-color: var(--theme-accent-border);
+}
+.dark .border-theme-accent {
+  border-color: var(--theme-accent-border-dark);
+}

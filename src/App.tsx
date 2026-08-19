@@ -8,6 +8,8 @@ import { Form03Page } from './components/Form03Page';
 import { SummaryTablePage } from './components/SummaryTablePage';
 import { ManageTeachersModal } from './components/ManageTeachersModal';
 import { PrintReportView } from './components/PrintReportView';
+import { ThemeCustomizerModal } from './components/ThemeCustomizerModal';
+import { ThemeConfig, getSavedTheme, applyThemeToDocument } from './lib/theme';
 import {
   syncInitialDataToFirestore,
   listenToTeachers,
@@ -21,11 +23,30 @@ import {
   saveEvaluationToGoogleSheet
 } from './lib/googleSheetService';
 export default function App() {
+  // Theme State
+  const [themeConfig, setThemeConfig] = useState<ThemeConfig>(() => getSavedTheme());
+  const [isThemeModalOpen, setIsThemeModalOpen] = useState(false);
+
   // Application State
   const [activeTab, setActiveTab] = useState<'login' | 'profile' | 'evaluation' | 'summary'>('login');
   const [selectedMonth, setSelectedMonth] = useState<number>(6); // Default Month 6/2026
   const [selectedYear, setSelectedYear] = useState<number>(2026); // Default Year 2026 per sheet
   const [currentRole, setCurrentRole] = useState<Role>('teacher');
+
+  // Apply theme effect on load and change
+  useEffect(() => {
+    applyThemeToDocument(themeConfig);
+  }, [themeConfig]);
+
+  const handleThemeChange = (newTheme: ThemeConfig) => {
+    setThemeConfig(newTheme);
+    applyThemeToDocument(newTheme);
+  };
+
+  const handleToggleDarkMode = () => {
+    const nextMode = themeConfig.mode === 'dark' ? 'light' : 'dark';
+    handleThemeChange({ ...themeConfig, mode: nextMode });
+  };
 
   // Teachers State (defaults to 36 teachers list)
   const [teachers, setTeachers] = useState<Teacher[]>(() => {
@@ -270,6 +291,9 @@ export default function App() {
         setSelectedYear={setSelectedYear}
         onLogout={handleLogout}
         teacherCount={teachers.length}
+        themeConfig={themeConfig}
+        onOpenThemeModal={() => setIsThemeModalOpen(true)}
+        onToggleDarkMode={handleToggleDarkMode}
       />
 
       {/* Main Page View Router */}
@@ -291,6 +315,7 @@ export default function App() {
             form01={currentForm01}
             evaluation={currentEvaluation}
             selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
             currentRole={currentRole}
             onSelectTeacher={(t) => setSelectedTeacher(t)}
             onUpdateTeacher={handleUpdateTeacher}
@@ -306,6 +331,7 @@ export default function App() {
             onSelectTeacher={(t) => setSelectedTeacher(t)}
             evaluation={currentEvaluation}
             selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
             currentRole={currentRole}
             onSaveEvaluation={handleSaveEvaluation}
             onOpenPrintModal={(type, teacherId) => {
@@ -325,6 +351,7 @@ export default function App() {
             evaluations={summaryEvaluationsMap}
             form01DataMap={summaryForm01Map}
             selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
             onSelectTeacherForView={(t, tab) => {
               setSelectedTeacher(t);
               setActiveTab(tab);
@@ -348,7 +375,7 @@ export default function App() {
             Hệ thống Quản lý & Chấm điểm Thi đua Giáo viên hàng tháng — Trường PTDTNT THCS và THPT Nước Oa
           </p>
           <p className="text-[11px] text-slate-400">
-            Bản quyền © 2026. Chuẩn Mẫu 01, Mẫu 03 & Bảng tổng hợp thi đua ngành Giáo dục.
+            Bản quyền © {selectedYear}. Chuẩn Mẫu 01, Mẫu 03 & Bảng tổng hợp thi đua ngành Giáo dục.
           </p>
         </div>
       </footer>
@@ -373,6 +400,14 @@ export default function App() {
         evaluation={currentEvaluation}
         evaluations={summaryEvaluationsMap}
         selectedMonth={selectedMonth}
+        selectedYear={selectedYear}
+      />
+
+      <ThemeCustomizerModal
+        isOpen={isThemeModalOpen}
+        onClose={() => setIsThemeModalOpen(false)}
+        currentTheme={themeConfig}
+        onThemeChange={handleThemeChange}
       />
 
     </div>
